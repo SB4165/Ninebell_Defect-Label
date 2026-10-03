@@ -513,11 +513,21 @@ function findVendor(text){
   }
   return best;
 }
+// 품번 목록에 없는 부품용: 품번처럼 생긴 글자를 그대로 가져옴 (숫자가 섞인 칸의 O는 0으로)
+function rawPart(text){
+  const fix = t => t.toUpperCase().split('-').map(g => /\d/.test(g) ? g[0] + g.slice(1).replace(/O/g,'0') : g.replace(/OO+/g, m => '0'.repeat(m.length))).join('-');
+  const projs = new Set(IX.proj.map(p => p.n));
+  const anc = (String(text).match(/(?:품번|DWG\s*No\.?|Part\s*No\.?)[\s:：|.]*([A-Za-z0-9-]+)/i) || [])[1];
+  const ok = t => /^[A-Z0-9]{2,6}(-[A-Z0-9]{1,6}){1,3}$/.test(t) && /\d/.test(t) && /[A-Z]/.test(t) && t.length >= 8 && !/^PUR/.test(t) && !projs.has(normC(t));
+  if (anc && ok(fix(anc))) return fix(anc);
+  const toks = String(text).split(/[\s,;|()]+/).map(t => fix(t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,''))).filter(ok);
+  return toks.sort((a,b) => (b.split('-').length - a.split('-').length) || b.length - a.length)[0] || '';
+}
 const isDrawing = t => [/DWG/i, /Surface\s*Rough/i, /\bScale\b/i, /Toleran/i, /Drawn\s*by/i, /Descrip/i, /Material/i].filter(r => r.test(t)).length >= 2;
 function analyze(text, conf){
   const drawing = isDrawing(text);
   const parts = partCands(text);
-  const r = { text, conf, drawing, parts,
+  const r = { text, conf, drawing, parts, raw: rawPart(text),
     proj: drawing ? null : findProj(text),
     qty: drawing ? '' : findQty(text),
     ven: drawing ? null : findVendor(text) };
@@ -557,7 +567,7 @@ async function recognize(file){
     const r = analyze(data.text, data.confidence); r.opt = opt; passes.push(r); return r;
   };
   const gotPart = () => out.pn || passes.some(p => p.parts[0]?.exact);
-  const any = () => gotPart() || passes.some(p => p.parts.length || p.proj || p.ven);
+  const any = () => gotPart() || passes.some(p => p.parts.length || p.proj || p.ven || p.raw);
   const r0 = rot ?? 0;
   const p1 = await run('글자 읽는 중…', { rot:r0, ...PASS.main }, 30);
   if (!p1.drawing) await run('한 번 더 확인 중…', { rot:r0, ...PASS.check }, 50);      // 라벨: 두 번 읽어서 서로 맞춰 봄
@@ -569,6 +579,9 @@ async function recognize(file){
     if (any()) { if (!gotPart()) await run('표제란 확대해서 읽는 중…', { rot:rr, crop: cropFor(rr, PASS.titleBlock), ...PASS.zoom }, 98); break; }
   }
   // 결과 합치기
+  const vote = (vals, keyf = x => x) => { const m = new Map();
+    vals.filter(Boolean).forEach((v, i) => { const k = keyf(v); const o = m.get(k) || { v, n:0, i }; o.n++; m.set(k, o); });
+    return [...m.values()].sort((a,b) => b.n - a.n || a.i - b.i); };
   out.drawing = passes.some(p => p.drawing);
   if (!out.pn) {
     const all = new Map();
@@ -577,12 +590,14 @@ async function recognize(file){
     const list = [...all.values()].map(c => ({ ...c, t: c.s + (c.n - 1) * 0.04 })).sort((a,b) => b.t - a.t);
     const top = list[0], second = list[1];
     if (top && (top.exact || (top.t >= 0.86 && (!second || top.t - second.t >= 0.08)))) { out.pn = { pn:top.pn, name:top.name, known:true, check:!top.exact }; out.via = '글자'; }
-    else out.cands = list.slice(0, 3);
+    else {
+      out.cands = list.slice(0, 3);
+      // 목록에서 확실한 걸 못 찾았으면 읽은 글자를 그대로 넣고 '확인 필요' 표시 (목록에 없는 외주 부품 등)
+      const raw = vote(passes.map(p => p.raw))[0]?.v;
+      if (raw) { out.pn = { pn:raw, name:'', known:false, check:true }; out.via = '글자'; out.cands = list.filter(c => c.pn !== raw).slice(0, 3); }
+    }
   }
   // 프로젝트·수량·귀책: 여러 번 읽은 결과 중 가장 많이 나온 값
-  const vote = (vals, keyf = x => x) => { const m = new Map();
-    vals.filter(Boolean).forEach((v, i) => { const k = keyf(v); const o = m.get(k) || { v, n:0, i }; o.n++; m.set(k, o); });
-    return [...m.values()].sort((a,b) => b.n - a.n || a.i - b.i); };
   const pj = vote(passes.map(p => p.proj), x => x.name).sort((a,b) => (b.v.known - a.v.known) || b.n - a.n || a.i - b.i);
   if (pj[0]) { out.proj = { ...pj[0].v, check: !pj[0].v.known || pj[0].v.weak || pj.length > 1 }; out.projAlt = pj.slice(1, 3).map(x => x.v.name); }
   out.qty = vote(passes.map(p => p.qty))[0]?.v || '';
@@ -656,8 +671,9 @@ async function onFile(file){
   try {
     const r = await recognize(file);
     window.__last = r;
-    if (r.pn) setField('pn', r.pn.pn, r.pn.check || !r.pn.known ? 'chk' : 'auto', r.via === 'QR' ? (r.pn.known ? 'QR 인식' : 'QR · 목록에 없음') : (r.pn.check ? '확인 필요' : '자동 인식'));
-    showCands(r.pn ? [] : r.cands);
+    if (r.pn) setField('pn', r.pn.pn, r.pn.check || !r.pn.known ? 'chk' : 'auto', r.via === 'QR' ? (r.pn.known ? 'QR 인식' : 'QR · 목록에 없음') : (!r.pn.known ? '목록에 없음 · 확인 필요' : r.pn.check ? '확인 필요' : '자동 인식'));
+    if (r.pn && r.cands.length) $('#cPn').innerHTML = '<span class="mut" style="width:100%">비슷한 품번:</span>' + r.cands.map(c => `<button class="chip" type="button" data-pn="${esc(c.pn)}">${esc(c.pn)}<small>${esc(fmtName(c.name))}</small></button>`).join('');
+    if (!r.pn) showCands(r.cands);
     if (r.proj) setField('proj', r.proj.name, r.proj.check ? 'chk' : 'auto', r.proj.check ? '확인 필요' : '자동 인식');
     showProjAlt(r.projAlt || []);
     if (r.qty) setField('qty', r.qty, 'auto', '자동 인식');

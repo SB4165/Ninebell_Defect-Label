@@ -126,12 +126,12 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
       </div>
       <div class="f">
         <label for="iVen"><span class="no">5</span>귀책 <span class="tag" id="tVen"></span></label>
-        <div class="combo"><input id="iVen" autocomplete="off" placeholder="입력 필요"><div class="dd" id="dVen"></div></div>
+        <div class="combo"><input id="iVen" autocomplete="off" placeholder="입력 필요 · 업체명 초성 검색 (예: ㅇㅍ)"><div class="dd" id="dVen"></div></div>
         <div class="hint" id="hVen"></div>
       </div>
       <div class="f">
         <label for="iReq"><span class="no">6</span>요청자 <span class="tag" id="tReq"></span></label>
-        <div class="combo"><input id="iReq" autocomplete="off" placeholder="입력 필요 (초성 검색: ㄱㅅㅂ)"><div class="dd" id="dReq"></div></div>
+        <div class="combo"><input id="iReq" autocomplete="off" placeholder="입력 필요 · 초성 검색 (예: ㄱㅅㅂ)"><div class="dd" id="dReq"></div></div>
         <div class="hint" id="hReq"></div>
       </div>
     </div>
@@ -727,42 +727,59 @@ function matchScore(q, s, pre){
   if (q.n.length >= 3 && normC(s).includes(q.n)) return 3;
   if (q.c && c.startsWith(q.c)) return 2; if (q.c && c.includes(q.c)) return 1; return 0;
 }
-// 초성을 연달아 치면 휴대폰 자판이 ㄱ+ㅅ을 ㄳ으로 합쳐버림 → 글자 입력이 끝나면 ㄱㅅ으로 풀어서 표시
+// 초성을 연달아 치면 휴대폰 자판이 ㄱ+ㅅ을 ㄳ으로 합쳐버림
+// → 품질팀 변환기와 같은 방식: 바로 ㄱㅅ으로 풀고 입력을 확정(다음 초성이 새로 입력되게)
 function unjoinJamo(input){
-  const fix = () => { const v = input.value, w = splitJamo(v); if (v !== w) { const p = input.selectionStart + (w.length - v.length); input.value = w; try { input.setSelectionRange(p, p); } catch(e) {} input.dispatchEvent(new Event('input')); } };
-  input.addEventListener('compositionend', () => setTimeout(fix, 0));
-  input.addEventListener('input', e => { if (!e.isComposing && /[ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ]/.test(input.value)) fix(); });
+  input.addEventListener('input', () => {
+    if (!/[ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ]/.test(input.value)) return;
+    input._keep = true; input.value = splitJamo(input.value); input.blur(); input.focus(); input._keep = false;
+    const n = input.value.length; try { input.setSelectionRange(n, n); } catch(_) {}
+  });
 }
-function combo(input, dd, source, onPick){
-  let act = -1, items = [];
+// 품질팀 변환기의 귀책·발견자 검색 조건 그대로 (vendorMatches / nameMatches)
+//   앞글자 일치 4 > 포함 3 > 초성 앞 일치 2 > 초성 포함 1, 같은 점수는 가나다순, 최대 30개
+function nameScore(q, name){
+  const qq = clean(splitJamo(q)).toLowerCase(), qc = choseong(qq);
+  const n = name.toLowerCase(), c = choseong(n);
+  if (!qq) return 1; if (n.startsWith(qq)) return 4; if (n.includes(qq)) return 3; if (c.startsWith(qc)) return 2; if (c.includes(qc)) return 1; return 0;
+}
+const byName = list => q => list().map(x => ({ x, s:nameScore(q, x.v) })).filter(o => o.s >= 1).sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x);
+// 프로젝트·품번 검색 (품번은 O↔0 같은 헷갈리는 글자도 찾음)
+const byCode = list => q => {
+  const raw = splitJamo(clean(q)); const qq = { l: raw.toLowerCase(), n: normC(raw), c: /[ㄱ-ㅎ]/.test(raw) ? choseong(raw.toLowerCase()) : '' };
+  const all = list();
+  return !raw ? all.slice(0, 30) : all.map(x => ({ x, s: Math.max(matchScore(qq, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(qq, x.sub) - 1 : 0) })).filter(o => o.s > 0)
+    .sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x);
+};
+function combo(input, dd, search, onPick, empty){
+  let act = 0, items = [];
   unjoinJamo(input);
+  const mark = () => [...dd.querySelectorAll('[data-i]')].forEach((d,i) => d.classList.toggle('act', i === act));
   const show = () => {
-    const raw = splitJamo(clean(input.value)); const q = { l: raw.toLowerCase(), n: normC(raw), c: /[ㄱ-ㅎ]/.test(raw) ? choseong(raw.toLowerCase()) : '' };
-    const all = source();
-    items = (!raw ? all.slice(0, 30) : all.map(x => ({ x, s: Math.max(matchScore(q, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(q, x.sub) - 1 : 0) })).filter(o => o.s > 0)
-      .sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x));
-    act = -1;
-    dd.innerHTML = items.map((x,i) => `<div data-i="${i}"><span>${esc(x.v)}</span>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</div>`).join('');
-    dd.style.display = items.length && document.activeElement === input ? 'block' : 'none';
+    items = search(input.value); act = 0;
+    dd.innerHTML = items.map((x,i) => `<div data-i="${i}"><span>${esc(x.v)}</span>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</div>`).join('')
+      || (empty && clean(input.value) ? `<div><small>${empty}</small></div>` : '');
+    mark();   // 첫 항목을 미리 선택 → Enter로 바로 고름
+    dd.style.display = dd.innerHTML && document.activeElement === input ? 'block' : 'none';
   };
   const pick = i => { if (!items[i]) return; input.value = items[i].v; dd.style.display = 'none'; onPick && onPick(items[i]); refresh(); };
   input.addEventListener('input', () => { show(); refresh(); });
   input.addEventListener('focus', show);
-  input.addEventListener('blur', () => setTimeout(() => dd.style.display = 'none', 150));
+  input.addEventListener('blur', () => { if (input._keep) return; setTimeout(() => { if (document.activeElement !== input) dd.style.display = 'none'; }, 150); });
   input.addEventListener('keydown', e => {
     if (dd.style.display !== 'block') return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); act = Math.max(0, Math.min(items.length-1, act + (e.key === 'ArrowDown' ? 1 : -1)));
-      [...dd.children].forEach((d,i) => d.classList.toggle('act', i === act)); dd.children[act]?.scrollIntoView({ block:'nearest' }); }
-    else if (e.key === 'Enter' && act >= 0) { e.preventDefault(); pick(act); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!items.length) return;
+      act = (act + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; mark(); dd.querySelectorAll('[data-i]')[act]?.scrollIntoView({ block:'nearest' }); }
+    else if (e.key === 'Enter') { if (items.length) { e.preventDefault(); pick(act); } }
     else if (e.key === 'Escape') dd.style.display = 'none';
   });
   dd.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
 }
 let srcProj = null, srcPn = null, srcVen = null;
-combo(F.proj, $('#dProj'), () => srcProj ||= S.proj.map(p => ({ v:p.name, sub:p.type })));
-combo(F.pn, $('#dPn'), () => srcPn ||= [...S.parts.values()].map(p => ({ v:p.pn, sub:fmtName(p.name) })), () => showCands([]));
-combo(F.ven, $('#dVen'), () => srcVen ||= S.vendors.map(v => ({ v:v.name, sub:v.big })));
-combo(F.req, $('#dReq'), () => S.finders.map(n => ({ v:n })), () => store.set('dl_req', clean(F.req.value)));
+combo(F.proj, $('#dProj'), byCode(() => srcProj ||= S.proj.map(p => ({ v:p.name, sub:p.type }))));
+combo(F.pn, $('#dPn'), byCode(() => srcPn ||= [...S.parts.values()].map(p => ({ v:p.pn, sub:fmtName(p.name) }))), () => showCands([]));
+combo(F.ven, $('#dVen'), byName(() => srcVen ||= S.vendors.map(v => ({ v:v.name, sub:v.big }))), null, '결과 없음');
+combo(F.req, $('#dReq'), byName(() => S.finders.map(n => ({ v:n }))), () => store.set('dl_req', clean(F.req.value)), '명단에 없음 — 그대로 입력돼요');
 F.req.addEventListener('change', () => store.set('dl_req', clean(F.req.value)));   // 요청자는 다음에도 그대로
 F.req.value = store.get('dl_req', '');
 F.qty.addEventListener('input', refresh); F.txt.addEventListener('input', refresh);

@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="only light">
+<title>부적합 처리 요청</title>
+<style>
+:root{
+  --empty:#fbdcd7; --empty-bd:#e9bfb8; --bg:#ffffff; --bg2:#f6f8fa; --bd:#d0d7de; --bd2:#d8dee4; --fg:#1f2328; --mut:#59636e;
+  --acc:#0969da; --acc-bg:#ddf4ff; --ok:#1a7f37; --ok-bg:#dafbe1; --btn:#1f883d; --btn-h:#1a7f37;
+  --warn:#9a6700; --warn-bg:#fff8c5; --err:#d1242f; --err-bg:#ffebe9; --sh:0 1px 0 rgba(31,35,40,.04);
+}
+html{color-scheme:only light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR","Malgun Gothic",Helvetica,Arial,sans-serif}
+header{background:var(--bg2);border-bottom:1px solid var(--bd);padding:12px 16px}
+.hwrap{max-width:680px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.logo{font-weight:600;font-size:16px;display:flex;align-items:center;gap:8px}
+.status{margin-left:auto;font-size:12px;color:var(--mut);display:flex;gap:6px;flex-wrap:wrap}
+.pill{border:1px solid var(--bd);border-radius:2em;padding:0 8px;background:var(--bg)}
+.pill.ok{color:var(--ok);border-color:var(--ok)} .pill.err{color:var(--err);border-color:var(--err)}
+main{max-width:680px;margin:0 auto;padding:16px}
+.box{border:1px solid var(--bd);border-radius:6px;background:var(--bg);box-shadow:var(--sh);margin-bottom:16px}
+.box-h{background:var(--bg2);border-bottom:1px solid var(--bd);padding:8px 12px;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.box-h h2{font-size:14px;margin:0;font-weight:600}
+.box-b{padding:12px}
+textarea,input{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 8px;width:100%}
+textarea{resize:vertical;min-height:64px}
+textarea:focus,input:focus{outline:2px solid var(--acc);outline-offset:-1px;border-color:var(--acc)}
+input.need,textarea.need{background:var(--empty);border-color:var(--empty-bd)}
+input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
+.btn{font:inherit;font-weight:500;border:1px solid var(--bd);background:var(--bg2);color:var(--fg);border-radius:6px;padding:6px 14px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{border-color:var(--mut)}
+.btn.pri{background:var(--btn);border-color:rgba(31,35,40,.15);color:#fff}
+.btn.pri:hover{background:var(--btn-h)}
+.btn.sm{padding:2px 10px;font-size:12px}
+.btn[disabled]{opacity:.55;cursor:default}
+.mut{color:var(--mut);font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pick .btn{padding:12px 10px;font-size:15px}
+.shot{display:none;margin-top:12px;gap:12px;align-items:flex-start}
+.shot img{width:96px;height:96px;object-fit:cover;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);flex:none}
+.prog{flex:1;min-width:0}
+.prog .t{font-size:13px;font-weight:600}
+.bar{height:6px;background:var(--bg2);border:1px solid var(--bd2);border-radius:3px;overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+.f{margin-bottom:10px}
+.f label{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);font-weight:600;margin-bottom:3px}
+.f label .no{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--bg2);border:1px solid var(--bd);font-size:11px;color:var(--fg)}
+.tag{font-size:11px;border-radius:2em;padding:0 7px;font-weight:600}
+.tag.auto{background:var(--ok-bg);color:var(--ok)} .tag.chk{background:var(--warn-bg);color:var(--warn)}
+.hint{font-size:12px;color:var(--mut);margin-top:3px;min-height:0}
+.hint.w{color:var(--warn)}
+.cands{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{font:inherit;font-size:12px;border:1px solid var(--bd);border-radius:2em;padding:3px 10px;background:var(--bg2);cursor:pointer;color:var(--fg);text-align:left}
+.chip:hover{border-color:var(--acc)}
+.chip small{color:var(--mut);margin-left:4px}
+.qty{display:flex;align-items:center;gap:6px}
+.qty input{max-width:120px}
+.qty span{color:var(--mut);font-size:13px;font-weight:600}
+.combo{position:relative}
+.dd{position:absolute;z-index:20;left:0;right:0;top:100%;margin-top:2px;background:var(--bg);border:1px solid var(--bd);border-radius:6px;box-shadow:0 8px 24px rgba(66,74,83,.2);max-height:260px;overflow:auto;display:none}
+.dd div{padding:7px 10px;cursor:pointer;display:flex;justify-content:space-between;gap:8px}
+.dd div small{color:var(--mut);text-align:right}
+.dd div:hover,.dd div.act{background:var(--acc-bg)}
+.out pre{margin:0;background:var(--bg2);border:1px solid var(--bd2);border-radius:6px;padding:10px 12px;white-space:pre-wrap;word-break:break-all;font:14px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans KR",monospace;min-height:110px}
+.out .btn.pri{width:100%;margin-top:10px;padding:12px;font-size:16px}
+.warn{font-size:12px;color:var(--warn);background:var(--warn-bg);border-radius:6px;padding:4px 8px;margin:8px 0 0}
+.toast{position:fixed;left:50%;top:16px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 16px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+.toast.on{opacity:1}
+@media (max-width:760px){ input,textarea{font-size:16px} .status{margin-left:0;width:100%} }
+</style>
+</head>
+<body>
+<header><div class="hwrap">
+  <div class="logo"><svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688ZM7.5 7.75a.75.75 0 0 1 1.5 0v2.5a.75.75 0 0 1-1.5 0Zm.75 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/></svg>부적합 처리 요청</div>
+  <div class="status" id="status"></div>
+</div></header>
+<main>
+  <section class="box">
+    <div class="box-h"><h2>라벨·도면 사진</h2><span class="mut">사진을 올리면 아래 칸이 자동으로 채워져요</span></div>
+    <div class="box-b">
+      <div class="pick">
+        <button class="btn pri" id="bCam" type="button">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5.5 2 4.6 3.5H2.75A1.75 1.75 0 0 0 1 5.25v7A1.75 1.75 0 0 0 2.75 14h10.5A1.75 1.75 0 0 0 15 12.25v-7a1.75 1.75 0 0 0-1.75-1.75H11.4L10.5 2h-5ZM8 5.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 1.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/></svg>사진 찍기</button>
+        <button class="btn" id="bAlb" type="button">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2Zm0 1.5a.25.25 0 0 0-.25.25v6.69l2.97-2.97a.75.75 0 0 1 1.06 0l2.22 2.22 3.22-3.22a.75.75 0 0 1 1.06 0l2.47 2.47V3.75a.25.25 0 0 0-.25-.25ZM5 6.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>앨범에서 선택</button>
+      </div>
+      <input type="file" id="fCam" accept="image/*" capture="environment" hidden>
+      <input type="file" id="fAlb" accept="image/*" hidden>
+      <div class="shot" id="shot">
+        <img id="thumb" alt="올린 사진">
+        <div class="prog">
+          <div class="t" id="pT">읽는 중…</div>
+          <div class="bar"><i id="pB"></i></div>
+          <div class="mut" id="pM"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="box">
+    <div class="box-h"><h2>입력</h2><span class="mut">사진이 없으면 직접 입력해도 돼요</span><button class="btn sm" id="bNew" type="button" style="margin-left:auto">새로 작성</button></div>
+    <div class="box-b">
+      <div class="f">
+        <label for="iProj"><span class="no">1</span>프로젝트명 <span class="tag" id="tProj"></span></label>
+        <div class="combo"><input id="iProj" autocomplete="off" placeholder="입력 필요"><div class="dd" id="dProj"></div></div>
+        <div class="hint" id="hProj"></div>
+        <div class="cands" id="cProj"></div>
+      </div>
+      <div class="f">
+        <label for="iPn"><span class="no">2</span>품번 <span class="tag" id="tPn"></span></label>
+        <div class="combo"><input id="iPn" autocomplete="off" autocapitalize="characters" placeholder="입력 필요"><div class="dd" id="dPn"></div></div>
+        <div class="hint" id="hPn"></div>
+        <div class="cands" id="cPn"></div>
+      </div>
+      <div class="f">
+        <label for="iQty"><span class="no">3</span>수량 <span class="tag" id="tQty"></span></label>
+        <div class="qty"><input id="iQty" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="입력 필요"><span>EA</span></div>
+      </div>
+      <div class="f">
+        <label for="iTxt"><span class="no">4</span>불량내용</label>
+        <textarea id="iTxt" rows="2" placeholder="입력 필요 (예: 탭 누락)"></textarea>
+      </div>
+      <div class="f">
+        <label for="iVen"><span class="no">5</span>귀책 <span class="tag" id="tVen"></span></label>
+        <div class="combo"><input id="iVen" autocomplete="off" placeholder="입력 필요"><div class="dd" id="dVen"></div></div>
+        <div class="hint" id="hVen"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="box out">
+    <div class="box-h"><h2>메시지</h2><span class="mut">복사해서 '부적합 처리요청' 방에 붙여넣기</span></div>
+    <div class="box-b">
+      <pre id="out"></pre>
+      <div class="warn" id="wOut" style="display:none"></div>
+      <button class="btn pri" id="bCopy" type="button">복사</button>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================== 설정 (여기만 고치면 됨) ================== */
+const CONFIG = {
+  SHEET_ID: '1hWRxLYkJfPEBfItSNKv7IFuSOFcLI35b9jCHnKVRBtE',
+  // 시트 찾는 순서: ① 올해 연도 이름 → ② 시트 고유번호(gid) → ③ 작년 연도 이름 (제목 줄로 내용 확인 후 사용)
+  REF:   { names: y=>[`참조(${y})`,`참조 (${y})`], gid: '664632288', range: 'AD1:AF3000' },             // 귀책(6.3)
+  PROJ:  { names: y=>[`참조(${y})`,`참조 (${y})`], gid: '664632288', range: 'L1:M5000', merge: true },  // 프로젝트 발주명, 올해+작년 합침
+  PARTS: { gid: '1577658176', range: 'A1:Z20000' },                                                    // 품명/품번 시트
+  // 라벨에 적힌 업체 이름 → 시트(귀책 목록)에 있는 이름. 왼쪽은 (주)·㈜·주식회사·공백·점을 뺀 글자로 적기
+  VENDOR_ALIAS: {
+    '브이피시스템': 'VP시스템',
+    '한국메카트로닉스': '한국메카',
+    '부성LTS': '부성LTS',
+    '해룡엔지니어링': '해룡엔지니어링',
+  },
+  // 사진 인식 도구 (무료, 휴대폰 안에서 처리). 버전을 바꿀 때만 수정
+  LIB: 'https://cdn.jsdelivr.net/npm/',
+  ZXING: 'zxing-wasm@2.2.4',
+  TESS: 'tesseract.js@5.1.1',
+  TESS_CORE: 'tesseract.js-core@5.1.1',
+};
+// 사진 읽는 방법 (시험 결과로 정한 값: 2배 확대 + 한 덩어리 글자 모드가 가장 잘 읽힘)
+const PASS = {
+  main:  { scale:2,   maxDim:2400, minDim:1600 },                 // 1차: 사진 전체
+  check: { scale:1.5, maxDim:2000, minDim:1200, psm:'11' },      // 2차(라벨): 흩어진 글자 모드로 한 번 더 → 결과 비교
+  titleBlock: { x:0.5, y:0.72, w:0.5, h:0.28 },                    // 도면 표제란 위치(오른쪽 아래)
+  zoom:  { scale:2,   maxDim:2400 },
+  moire: { scale:1,   maxDim:1600, blur:2, ch:'lum' },             // 모니터를 찍은 사진(물결무늬)
+};
+const QS = new URLSearchParams(location.search);
+const LIB = QS.get('lib') || CONFIG.LIB;     // 시험용: ?lib=로 라이브러리 위치를 바꿀 수 있음
+
+/* ================== 유틸 ================== */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const clean = s => String(s ?? '').replace(/\s+/g,' ').trim();
+const key = s => clean(s).toUpperCase().replace(/\s+/g,'');
+const ko = (a,b) => String(a).localeCompare(String(b),'ko');
+const store = { get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+                set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),1400); }
+const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+const choseong = s => [...String(s)].map(ch => { const c=ch.charCodeAt(0)-0xAC00; return (c>=0&&c<11172)? CHO[Math.floor(c/588)] : ch; }).join('');
+const JAMO2 = {'ㄳ':'ㄱㅅ','ㄵ':'ㄴㅈ','ㄶ':'ㄴㅎ','ㄺ':'ㄹㄱ','ㄻ':'ㄹㅁ','ㄼ':'ㄹㅂ','ㄽ':'ㄹㅅ','ㄾ':'ㄹㅌ','ㄿ':'ㄹㅍ','ㅀ':'ㄹㅎ','ㅄ':'ㅂㅅ'};
+const splitJamo = s => String(s||'').replace(/[ㄳㄵㄶㄺㄻㄼㄽㄾㄿㅀㅄ]/g, c => JAMO2[c]);
+// 품명 표기: 영문은 대문자, 프레임/FRAME이 들어가면 '-'
+const fmtName = n => { n = clean(n); if (!n) return ''; if (/프레임|FRAME/i.test(n)) return '-'; return n.toUpperCase(); };
+// 글자 인식에서 헷갈리는 글자를 같은 값으로 맞춤 (O↔0, I↔1 등) → 품번·프로젝트 대조용
+const normC = s => String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'')
+  .replace(/[OQD]/g,'0').replace(/[IL]/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8').replace(/G/g,'6');
+// 업체 이름 대조용: (주)·㈜·주식회사·공백·점 제거
+const normV = s => String(s||'').toUpperCase().replace(/\(주\)|㈜|주식회사|\(유\)|\(株\)|\(쥐\)|\(추\)/g,'').replace(/[^0-9A-Z가-힣]/g,'');
+const normN = s => String(s||'').toUpperCase().replace(/[^0-9A-Z가-힣]/g,'');
+function lev(a, b, max){
+  const m=a.length, n=b.length; if (Math.abs(m-n)>max) return max+1;
+  let prev = Array.from({length:n+1},(_,j)=>j), cur = new Array(n+1);
+  for (let i=1;i<=m;i++){ cur[0]=i; let lo=cur[0];
+    for (let j=1;j<=n;j++){ cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1)); if(cur[j]<lo) lo=cur[j]; }
+    if (lo>max) return max+1; [prev,cur]=[cur,prev]; }
+  return prev[n];
+}
+
+/* ================== 구글시트 읽기 (JSONP, 공개 링크) ================== */
+let jsonpN = 0;
+async function loadSheet(cfg, parse, ok){
+  const Y = new Date().getFullYear(), seen = new Set(), cands = [];
+  const add = c => { const k = c.sheet || 'gid:'+c.gid; if (!seen.has(k)) { seen.add(k); cands.push(c); } };
+  (cfg.names ? cfg.names(Y) : []).forEach(n => add({ sheet:n, range:cfg.range }));
+  if (cfg.gid) add({ gid:cfg.gid, range:cfg.range });
+  (cfg.names ? cfg.names(Y-1) : []).forEach(n => add({ sheet:n, range:cfg.range }));
+  const got = [], sigs = new Set();
+  for (const c of cands) {
+    try {
+      const rows = await gviz(c);
+      const sig = rows.length + '|' + JSON.stringify(rows.slice(0,8));   // 같은 시트를 이름·gid로 두 번 읽은 경우 제외
+      if (sigs.has(sig)) continue;
+      const x = parse(rows); if (!ok(x)) continue;   // gviz는 없는 시트 이름이면 첫 시트를 주므로 내용으로 검증
+      sigs.add(sig); got.push(x);
+      if (!cfg.merge) break;
+    } catch(e) {}
+  }
+  if (!got.length) throw new Error('시트를 찾지 못함');
+  return got;
+}
+function gviz(src){
+  return new Promise((res, rej) => {
+    const cb = '__gv' + (++jsonpN) + '_' + Date.now();
+    const p = new URLSearchParams({ tqx:'out:json;responseHandler:'+cb, headers:'0', range: src.range });
+    if (src.sheet) p.set('sheet', src.sheet); else if (src.gid) p.set('gid', src.gid);
+    const s = document.createElement('script');
+    const done = () => { delete window[cb]; s.remove(); clearTimeout(to); };
+    const to = setTimeout(() => { done(); rej(new Error('시간 초과')); }, 20000);
+    window[cb] = resp => { done();
+      if (resp.status === 'error') return rej(new Error((resp.errors||[])[0]?.detailed_message || '시트 오류'));
+      res((resp.table?.rows || []).map(r => (r.c || []).map(c => c ? String(c.f ?? c.v ?? '') : '')));
+    };
+    s.onerror = () => { done(); rej(new Error('불러오기 실패')); };
+    s.src = `https://docs.google.com/spreadsheets/d/${CONFIG.SHEET_ID}/gviz/tq?` + p.toString();
+    document.head.appendChild(s);
+  });
+}
+
+/* ================== 시트 파싱 (제목 글자로 위치 찾기) ================== */
+const isTitle = s => /^\s*\d+(\.\d+)+\s/.test(s||'');
+function parseVendors(rows){
+  const out = []; let mode = null;
+  for (const r of rows) {
+    const [a='', b=''] = r.map(clean);
+    if (isTitle(a)) { mode = null; continue; }
+    if (a==='대분류' && b==='세부귀책') { mode = 'ven'; continue; }
+    if (a==='대분류') { mode = null; continue; }
+    if (mode==='ven' && a && b) out.push({ big:a, name:b });
+  }
+  return out;
+}
+function parseProj(rows){
+  const out = []; let on = false;
+  for (const r of rows) {
+    const [a='', b=''] = r.map(clean);
+    if (!on) { if (/발주명|PROJECT/i.test(a) && /^TYPE|타입/i.test(b)) on = true; continue; }
+    if (a && !/발주명|PROJECT/i.test(a)) out.push({ name:a, type:b, k:key(a) });
+  }
+  return out;
+}
+function parseParts(rows){
+  const isPnH = x => /^(품번|도번|part ?(no|number))/i.test(clean(x).replace(/\s/g,''));
+  const isNmH = x => /^(품명|item ?name|name)/i.test(clean(x).replace(/\s/g,''));
+  let pi = -1, ni = -1, start = 0;
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const r = rows[i]; const a = r.findIndex(isPnH), b = r.findIndex(isNmH);
+    if (a >= 0 && b >= 0) { pi = a; ni = b; start = i + 1; break; }
+  }
+  if (pi < 0) {
+    const n = Math.max(...rows.slice(0,50).map(r=>r.length), 2);
+    const score = j => rows.slice(0,300).filter(r => /\d/.test(r[j]||'') && /-/.test(r[j]||'')).length;
+    pi = [...Array(n).keys()].sort((a,b)=>score(b)-score(a))[0]; ni = pi + 1 < n ? pi + 1 : pi - 1;
+  }
+  const map = new Map();
+  for (const r of rows.slice(start)) {
+    const pn = clean(r[pi]), nm = clean(r[ni]);
+    if (!pn || isPnH(pn)) continue;
+    for (const one of pn.split(/\s*[\/,\n]\s*/)) {
+      const k = key(one); if (k.length < 3) continue;
+      if (!map.has(k)) map.set(k, { pn: one, name: nm });
+    }
+  }
+  return map;
+}
+
+/* ================== 상태 / 데이터 불러오기 ================== */
+const S = { parts:new Map(), proj:[], vendors:[], ld:{} };
+const IX = { pn:new Map(), tri:new Map(), list:[], proj:[], ven:[] };
+function buildIndex(){
+  IX.list = [...S.parts.values()].map(p => ({ p, n:normC(p.pn), nm:normN(p.name) }));
+  IX.pn = new Map(); IX.tri = new Map();
+  IX.list.forEach((e,i) => {
+    if (!IX.pn.has(e.n)) IX.pn.set(e.n, []); IX.pn.get(e.n).push(i);
+    const seen = new Set();
+    for (let j=0;j+3<=e.n.length;j++){ const t=e.n.substr(j,3); if (seen.has(t)) continue; seen.add(t); if(!IX.tri.has(t)) IX.tri.set(t,[]); IX.tri.get(t).push(i); }
+  });
+  const pm = new Map(); S.proj.forEach(p => { if (!pm.has(p.k)) pm.set(p.k, p); });
+  IX.proj = [...pm.values()].map(p => ({ name:p.name, n:normC(p.name) })).filter(p => p.n.length >= 4);
+  const vm = new Map();
+  S.vendors.forEach(v => { const n = normV(v.name); if (n && !vm.has(n)) vm.set(n, v.name); });
+  for (const [a, b] of Object.entries(CONFIG.VENDOR_ALIAS)) { const n = normV(a); if (n) vm.set(n, b); }
+  IX.ven = [...vm].map(([n, name]) => ({ n, name })).filter(v => v.n.length >= 2);
+}
+function setStatus(){
+  const p = (ok, label) => `<span class="pill ${ok===true?'ok':ok===false?'err':''}">${label}</span>`;
+  $('#status').innerHTML = [
+    p(S.ld.parts, '품번 ' + (S.parts.size||'')),
+    p(S.ld.proj, '프로젝트 ' + (S.proj.length||'')),
+    p(S.ld.ven, '귀책 ' + (S.vendors.length||'')),
+  ].join('');
+}
+async function loadAll(){
+  const cache = store.get('dl_cache', null);
+  if (cache) { S.parts = new Map(cache.parts); S.proj = cache.proj; S.vendors = cache.vendors; buildIndex(); }
+  setStatus();
+  const jobs = [
+    loadSheet(CONFIG.PARTS, parseParts, x=>x.size>0).then(([x])=>{ S.parts=x; S.ld.parts=true; }).catch(()=>S.ld.parts=false),
+    loadSheet(CONFIG.PROJ, parseProj, x=>x.length>0).then(list=>{ const m=new Map(); list.flat().forEach(p=>{ if(!m.has(p.k)) m.set(p.k,p); }); S.proj=[...m.values()]; S.ld.proj=true; }).catch(()=>S.ld.proj=false),
+    loadSheet(CONFIG.REF, parseVendors, x=>x.length>0).then(([x])=>{ S.vendors=x; S.ld.ven=true; }).catch(()=>S.ld.ven=false),
+  ];
+  for (const j of jobs) j.then(setStatus);
+  await Promise.all(jobs);
+  buildIndex(); setStatus();
+  if (S.ld.parts || S.ld.proj || S.ld.ven) store.set('dl_cache', { parts:[...S.parts], proj:S.proj, vendors:S.vendors });
+}
+
+/* ================== 이미지 준비 ================== */
+function loadImg(file){
+  return new Promise((res, rej) => { const u = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => res(im); im.onerror = () => rej(new Error('사진을 열 수 없음')); im.src = u; });
+}
+// rot: 시계방향 회전(0/90/180/270), crop: 비율 {x,y,w,h}, maxDim/minDim: 긴 변 크기 범위, gray: 흑백+대비, blur: 흐림(물결무늬 줄이기)
+function prep(img, { rot=0, crop=null, maxDim=2000, minDim=0, scale=0, gray=true, blur=0, ch='min' } = {}){
+  const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+  const c = crop || { x:0, y:0, w:1, h:1 };
+  const sx = Math.round(W*c.x), sy = Math.round(H*c.y), sw = Math.round(W*c.w), sh = Math.round(H*c.h);
+  let s = Math.min(1, maxDim / Math.max(sw, sh));
+  if (minDim && Math.max(sw, sh) * s < minDim) s = Math.min(3, minDim / Math.max(sw, sh));
+  if (scale) s = Math.min(scale, maxDim / Math.max(sw, sh));
+  const w = Math.max(1, Math.round(sw*s)), h = Math.max(1, Math.round(sh*s));
+  const cv = document.createElement('canvas');
+  const sw90 = rot===90 || rot===270;
+  cv.width = sw90 ? h : w; cv.height = sw90 ? w : h;
+  const x = cv.getContext('2d', { willReadFrequently:true });
+  x.fillStyle = '#fff'; x.fillRect(0,0,cv.width,cv.height);
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.translate(cv.width/2, cv.height/2); x.rotate(rot*Math.PI/180);
+  x.drawImage(img, sx, sy, sw, sh, -w/2, -h/2, w, h);
+  x.setTransform(1,0,0,1,0,0);
+  if (gray || blur) {
+    const d = x.getImageData(0,0,cv.width,cv.height), a = d.data, n = cv.width*cv.height;
+    let g = new Float32Array(n);
+    for (let i=0;i<n;i++) g[i] = ch === 'lum' ? 0.299*a[i*4] + 0.587*a[i*4+1] + 0.114*a[i*4+2]
+      : Math.min(a[i*4], a[i*4+1], a[i*4+2]);   // 가장 어두운 색 채널 → 도면의 하늘색 글자도 진하게
+    for (let k=0;k<blur;k++) g = boxBlur(g, cv.width, cv.height);
+    // 대비 늘리기: 하위 2% → 검정, 상위 2% → 흰색
+    const hist = new Uint32Array(256); for (let i=0;i<n;i++) hist[g[i]|0]++;
+    let lo=0, hi=255, acc=0; for (; lo<255; lo++){ acc+=hist[lo]; if (acc>n*0.02) break; }
+    acc=0; for (; hi>0; hi--){ acc+=hist[hi]; if (acc>n*0.02) break; }
+    const r = Math.max(1, hi-lo);
+    for (let i=0;i<n;i++){ const v = Math.max(0, Math.min(255, (g[i]-lo)*255/r)); a[i*4]=a[i*4+1]=a[i*4+2]=v; }
+    x.putImageData(d,0,0);
+  }
+  return cv;
+}
+function boxBlur(g, w, h){
+  const o = new Float32Array(g.length);
+  for (let y=0;y<h;y++) for (let x=0;x<w;x++){ let s=0,c=0;
+    for (let dy=-1;dy<=1;dy++){ const yy=y+dy; if(yy<0||yy>=h) continue;
+      for (let dx=-1;dx<=1;dx++){ const xx=x+dx; if(xx<0||xx>=w) continue; s+=g[yy*w+xx]; c++; } }
+    o[y*w+x]=s/c; }
+  return o;
+}
+
+/* ================== 라이브러리 (처음 쓸 때 한 번 내려받고 이후엔 캐시) ================== */
+const loaded = {};
+function loadScript(src){ return loaded[src] ||= new Promise((res, rej) => { const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=()=>{ delete loaded[src]; rej(new Error('도구를 불러오지 못함')); }; document.head.appendChild(s); }); }
+async function zx(){
+  await loadScript(`${LIB}${CONFIG.ZXING}/dist/iife/reader/index.js`);
+  if (!zx.ready) { ZXingWASM.prepareZXingModule({ overrides: { locateFile: (p, pre) => p.endsWith('.wasm') ? `${LIB}${CONFIG.ZXING}/dist/reader/${p}` : pre + p } }); zx.ready = true; }
+  return ZXingWASM;
+}
+let workerP = null, onOcrProg = null;
+function ocrWorker(){
+  return workerP ||= (async () => {
+    await loadScript(`${LIB}${CONFIG.TESS}/dist/tesseract.min.js`);
+    const opt = { workerPath:`${LIB}${CONFIG.TESS}/dist/worker.min.js`, corePath:`${LIB}${CONFIG.TESS_CORE}`,
+      logger: m => onOcrProg && onOcrProg(m) };
+    if (QS.get('lib')) opt.langPath = `${LIB}tessdata`;   // 시험용. 평소에는 jsdelivr 기본 경로(언어별) 사용
+    const w = await Tesseract.createWorker(['eng','kor'], 1, opt);
+    await w.setParameters({ tessedit_pageseg_mode: '6', preserve_interword_spaces: '1' }); w._psm = '6';
+    return w;
+  })().catch(e => { workerP = null; throw e; });
+}
+
+/* ================== QR / 바코드 ================== */
+async function readCodes(img){
+  const Z = await zx();
+  const tries = [ { maxDim:1600, gray:false }, { maxDim:2400, minDim:1400, gray:true }, { maxDim:2400, minDim:2400, gray:false } ];
+  const all = [], seen = new Set();
+  for (const t of tries) {
+    const cv = prep(img, t);
+    const id = cv.getContext('2d').getImageData(0,0,cv.width,cv.height);
+    let res = [];
+    try { res = await Z.readBarcodes(id, { tryHarder:true, maxNumberOfSymbols:6 }); } catch(e) {}
+    for (const r of res) if (r.isValid && r.text && !seen.has(r.text)) { seen.add(r.text); all.push(r); }
+    if (all.some(r => codePart(r.text))) break;   // 품번이 든 코드를 찾으면 그만
+  }
+  return all;
+}
+const codePart = t => S.parts.get(key(t)) || (IX.pn.get(normC(t)) || []).map(j => IX.list[j].p)[0];
+// QR 기울기로 사진 방향 판단 → OCR을 바로 그 방향으로
+function rotFromCode(r){
+  const p = r.position; if (!p) return null;
+  const ang = Math.atan2(p.topRight.y - p.topLeft.y, p.topRight.x - p.topLeft.x) * 180 / Math.PI;
+  const q = ((Math.round(ang/90) % 4) + 4) % 4;
+  return (4 - q) % 4 * 90;
+}
+
+/* ================== 글자에서 정보 찾기 ================== */
+function partCands(text){
+  if (!IX.list.length) return [];
+  const toks = String(text).split(/[\s,;|]+/).map(t => t.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g,'')).filter(Boolean);
+  const best = new Map();   // index → score
+  const put = (i, s) => { if ((best.get(i) || 0) < s) best.set(i, s); };
+  for (let i=0;i<toks.length;i++) for (let k=1;k<=3 && i+k<=toks.length;k++) {
+    const raw = toks.slice(i,i+k).join('');
+    if (raw.length < 5 || raw.length > 26 || !/\d/.test(raw) || !/[A-Za-z]/.test(raw) && raw.length < 7) continue;
+    if (/^PUR\d/i.test(raw)) continue;
+    const w = normC(raw); if (w.length < 5) continue;
+    const ex = IX.pn.get(w); if (ex) { ex.forEach(j => put(j, 1 + (k===1?0.02:0))); continue; }
+    // 3글자 조각이 많이 겹치는 품번만 골라서 정밀 비교
+    const hit = new Map(), tris = new Set();
+    for (let j=0;j+3<=w.length;j++) tris.add(w.substr(j,3));
+    for (const t of tris) for (const j of (IX.tri.get(t) || [])) hit.set(j, (hit.get(j)||0) + 1);
+    const need = Math.max(2, Math.ceil(tris.size * 0.5));
+    for (const [j, h] of hit) {
+      if (h < need) continue;
+      const n = IX.list[j].n; let s = 0;
+      const d = lev(w, n, 3); if (d <= 3) s = 1 - d / Math.max(w.length, n.length);
+      if (w.length >= 6 && n.includes(w)) s = Math.max(s, 0.6 + 0.35 * w.length / n.length);
+      if (n.length >= 6 && w.includes(n)) s = Math.max(s, 0.6 + 0.35 * n.length / w.length);
+      if (s >= 0.7) put(j, s);
+    }
+  }
+  const T = normN(text);
+  return [...best].map(([j, s]) => { const e = IX.list[j];
+      const nb = e.nm.length >= 4 && T.includes(e.nm) ? 0.12 : 0;   // 사진에 품명도 보이면 가산점
+      return { pn:e.p.pn, name:e.p.name, s: s + nb, exact: s >= 1 }; })
+    .sort((a,b) => b.s - a.s || a.pn.length - b.pn.length).slice(0, 5);
+}
+function findProj(text){
+  const lines = String(text).split('\n').map(l => l.replace(/PUR\s*\d{6,}/gi,' '));
+  // ① '프로젝트명 :' / 'Project |' 바로 뒤의 글자
+  const anc = [...String(text).matchAll(/(?:프로젝트명?|PROJECT(?:\s*NAME)?)[\s:：|.]*([^\s,，、]+)/gi)].map(m => m[1]).filter(t => normC(t).length >= 4);
+  for (const t of anc) { const n = normC(t); const p = IX.proj.find(p => p.n === n); if (p) return { name:p.name, known:true }; }
+  // ② 글 전체에서 목록의 프로젝트명 찾기
+  let best = null;
+  for (const line of lines) {
+    const L = normC(line); if (L.length < 4) continue;
+    for (const p of IX.proj) {
+      const i = L.indexOf(p.n); if (i < 0) continue;
+      if (/[0-9]/.test(L[i + p.n.length] || '') && /[0-9]$/.test(p.n)) continue;   // CC04-15 ↔ CC04-157 혼동 방지
+      if (i > 0 && /[0-9]/.test(L[i-1]) && /^[0-9]/.test(p.n)) continue;
+      if (!best || p.n.length > best.n.length) best = p;
+    }
+  }
+  if (best) return { name: best.name, known: true };
+  // ③ 라벨 뒤 글자가 조금 틀린 경우(CJ07-122 → <)07-122): 가장 가까운 것 하나만 있으면 채택
+  for (const t of anc) {
+    const n = normC(t); let md = 3, hit = [];
+    for (const p of IX.proj) { const d = lev(n, p.n, 2); if (d < md) { md = d; hit = [p]; } else if (d === md) hit.push(p); }
+    if (md <= 2 && hit.length === 1) return { name: hit[0].name, known: true, weak: true };
+  }
+  // ④ 앞 글자 하나가 빠진 경우(£CP381 → ECP381)
+  for (const line of lines) for (const t of line.split(/[\s,]+/)) {
+    const n = normC(t); if (n.length < 5) continue;
+    const p = IX.proj.find(p => p.n.length === n.length + 1 && p.n.endsWith(n) && /[A-Z]/.test(p.name[0]));
+    if (p) return { name: p.name, known: true, weak: true };
+  }
+  const m = String(text).match(/\b(ECP\s?\d{3}|[A-Z]{2}\d{2}-\d{3})\b/);
+  return m ? { name: m[1].replace(/\s/g,''), known: false } : null;
+}
+function findQty(text){
+  const t = String(text);
+  let m = t.match(/수\s*량\s*[:：;.]?\s*(\d{1,4})\b/) || t.match(/\b(\d{1,4})\s*(?:EA|Ea|ea|개|PCS|pcs)\b/);
+  if (m) return String(+m[1]);
+  m = t.match(/(?:^|\s)([0-9Il|]{1,3})\s*E\s*A\b/);
+  return m ? String(+m[1].replace(/[Il|]/g,'1')) || '' : '';
+}
+function findVendor(text){
+  const T = normV(text); if (!T) return null;
+  let best = null;
+  const take = (v, s) => { if (!best || s > best.s || (s === best.s && v.n.length > best.n.length)) best = { ...v, s }; };
+  for (const v of IX.ven) {
+    if (v.n.length >= 3 && T.includes(v.n)) { take(v, 1); continue; }
+    if (v.n.length >= 4) {   // 한두 글자 잘못 읽힌 경우
+      const md = v.n.length >= 6 ? 2 : 1;
+      for (let i=0;i+v.n.length-1<=T.length;i++) {
+        const d = lev(v.n, T.substr(i, v.n.length), md);
+        if (d <= md) { take(v, 0.9 - d*0.1); break; }
+      }
+    }
+  }
+  return best;
+}
+const isDrawing = t => [/DWG/i, /Surface\s*Rough/i, /\bScale\b/i, /Toleran/i, /Drawn\s*by/i, /Descrip/i, /Material/i].filter(r => r.test(t)).length >= 2;
+function analyze(text, conf){
+  const drawing = isDrawing(text);
+  const parts = partCands(text);
+  const r = { text, conf, drawing, parts,
+    proj: drawing ? null : findProj(text),
+    qty: drawing ? '' : findQty(text),
+    ven: drawing ? null : findVendor(text) };
+  r.score = (parts[0]?.exact ? 3 : parts[0] ? parts[0].s : 0) + (r.proj?.known ? 1 : 0) + (r.ven ? 0.5 : 0) + (r.qty ? 0.3 : 0) + (conf||0)/200;
+  return r;
+}
+
+/* ================== 사진 인식 순서: QR → 글자(OCR) → 도면 표제란 확대 ================== */
+async function recognize(file){
+  const img = await loadImg(file);
+  $('#thumb').src = img.src;
+  const out = { pn:null, cands:[], proj:null, qty:'', ven:null, drawing:false, via:'' };
+  // 1) QR/바코드
+  step('QR 읽는 중…', 5);
+  let rot = null;
+  try {
+    const codes = await readCodes(img);
+    for (const c of codes) {
+      const hit = codePart(c.text);
+      if (hit) { out.pn = { pn:hit.pn, name:hit.name, known:true }; rot = rotFromCode(c); break; }
+    }
+    if (!out.pn) { const c = codes.find(c => /^[A-Z0-9]{2,}(-[A-Z0-9]+){1,4}$/i.test(clean(c.text)) && /\d/.test(c.text));
+      if (c) { out.pn = { pn:clean(c.text).toUpperCase(), name:'', known:false }; rot = rotFromCode(c); } }
+    if (rot == null && codes[0]) rot = rotFromCode(codes[0]);
+    if (out.pn) out.via = 'QR';
+    out.codes = codes.map(c => c.text);
+  } catch(e) { console.warn('QR', e); }
+  // 2) 글자 인식
+  step('글자 인식 준비 중… (처음 한 번만 오래 걸려요)', 15);
+  const w = await ocrWorker();
+  const passes = [];
+  const run = async (label, opt, pct) => {
+    step(label, pct);
+    const psm = opt.psm || '6';
+    if (w._psm !== psm) { await w.setParameters({ tessedit_pageseg_mode: psm }); w._psm = psm; }
+    const { data } = await w.recognize(prep(img, opt));
+    const r = analyze(data.text, data.confidence); r.opt = opt; passes.push(r); return r;
+  };
+  const gotPart = () => out.pn || passes.some(p => p.parts[0]?.exact);
+  const any = () => gotPart() || passes.some(p => p.parts.length || p.proj || p.ven);
+  const r0 = rot ?? 0;
+  const p1 = await run('글자 읽는 중…', { rot:r0, ...PASS.main }, 30);
+  if (!p1.drawing) await run('한 번 더 확인 중…', { rot:r0, ...PASS.check }, 50);      // 라벨: 두 번 읽어서 서로 맞춰 봄
+  if (!gotPart()) await run('표제란 확대해서 읽는 중…', { rot:r0, crop: cropFor(r0, PASS.titleBlock), ...PASS.zoom }, 65);
+  if (!gotPart()) await run('흐림 보정해서 다시 읽는 중…', { rot:r0, ...PASS.moire }, 78);
+  // 아무것도 못 읽었고 QR로 방향을 몰랐다면: 사진이 돌아가 있을 수 있으니 다른 방향으로
+  if (rot == null && !any()) for (const [i, rr] of [90, 270, 180].entries()) {
+    await run(`다른 방향으로 읽는 중… (${i+1}/3)`, { rot:rr, ...PASS.main }, 84 + i*5);
+    if (any()) { if (!gotPart()) await run('표제란 확대해서 읽는 중…', { rot:rr, crop: cropFor(rr, PASS.titleBlock), ...PASS.zoom }, 98); break; }
+  }
+  // 결과 합치기
+  out.drawing = passes.some(p => p.drawing);
+  if (!out.pn) {
+    const all = new Map();
+    for (const p of passes) for (const c of p.parts) { const o = all.get(c.pn); if (!o) all.set(c.pn, { ...c, n:1 }); else { o.n++; o.s = Math.max(o.s, c.s); o.exact = o.exact || c.exact; } }
+    // 여러 번 같은 품번이 나오면 가산점
+    const list = [...all.values()].map(c => ({ ...c, t: c.s + (c.n - 1) * 0.04 })).sort((a,b) => b.t - a.t);
+    const top = list[0], second = list[1];
+    if (top && (top.exact || (top.t >= 0.86 && (!second || top.t - second.t >= 0.08)))) { out.pn = { pn:top.pn, name:top.name, known:true, check:!top.exact }; out.via = '글자'; }
+    else out.cands = list.slice(0, 3);
+  }
+  // 프로젝트·수량·귀책: 여러 번 읽은 결과 중 가장 많이 나온 값
+  const vote = (vals, keyf = x => x) => { const m = new Map();
+    vals.filter(Boolean).forEach((v, i) => { const k = keyf(v); const o = m.get(k) || { v, n:0, i }; o.n++; m.set(k, o); });
+    return [...m.values()].sort((a,b) => b.n - a.n || a.i - b.i); };
+  const pj = vote(passes.map(p => p.proj), x => x.name).sort((a,b) => (b.v.known - a.v.known) || b.n - a.n || a.i - b.i);
+  if (pj[0]) { out.proj = { ...pj[0].v, check: !pj[0].v.known || pj[0].v.weak || pj.length > 1 }; out.projAlt = pj.slice(1, 3).map(x => x.v.name); }
+  out.qty = vote(passes.map(p => p.qty))[0]?.v || '';
+  out.ven = passes.map(p => p.ven).filter(Boolean).sort((a,b) => b.s - a.s)[0] || null;
+  out.passes = passes.map(p => ({ opt:p.opt, score:+p.score.toFixed(2), text:p.text }));
+  return out;
+}
+// 회전된 사진에서 "회전 후 오른쪽 아래"에 해당하는 원본 영역
+function cropFor(rot, c){
+  if (rot === 90)  return { x:c.y, y:1-c.x-c.w, w:c.h, h:c.w };
+  if (rot === 180) return { x:1-c.x-c.w, y:1-c.y-c.h, w:c.w, h:c.h };
+  if (rot === 270) return { x:1-c.y-c.h, y:c.x, w:c.h, h:c.w };
+  return c;
+}
+
+/* ================== 화면 ================== */
+const F = { proj:$('#iProj'), pn:$('#iPn'), qty:$('#iQty'), txt:$('#iTxt'), ven:$('#iVen') };
+const auto = { proj:'', pn:'', qty:'', ven:'' };   // 자동으로 채운 값(사용자가 고치면 표시 사라짐)
+function step(t, pct){ $('#pT').textContent = t; if (pct != null) $('#pB').style.width = pct + '%'; }
+function tag(id, kind, text){ const e = $(id); e.className = 'tag' + (kind ? ' ' + kind : ''); e.textContent = text || ''; }
+function partInfo(v){ return S.parts.get(key(v)); }
+function refresh(){
+  for (const [k, el] of Object.entries(F)) el.classList.toggle('need', !clean(el.value));
+  F.qty.value = F.qty.value.replace(/\D/g,'');
+  for (const k of ['proj','pn','qty','ven']) if (auto[k] && clean(F[k].value) !== auto[k]) { auto[k] = ''; tag('#t'+k[0].toUpperCase()+k.slice(1), '', ''); }
+  const pi = clean(F.pn.value) ? partInfo(F.pn.value) : null;
+  const hp = $('#hPn');
+  if (!clean(F.pn.value)) { hp.textContent = ''; hp.className = 'hint'; }
+  else if (pi) { hp.textContent = '품명: ' + (fmtName(pi.name) || '-'); hp.className = 'hint'; }
+  else if (S.parts.size) { hp.textContent = '품번 목록에 없는 번호예요. 다시 확인해 주세요.'; hp.className = 'hint w'; }
+  const pr = clean(F.proj.value), hj = $('#hProj');
+  if (pr && S.proj.length && !S.proj.some(p => p.k === key(pr))) { hj.textContent = '프로젝트 목록에 없는 이름이에요. 맞는지 확인해 주세요.'; hj.className = 'hint w'; }
+  else { hj.textContent = ''; hj.className = 'hint'; }
+  const vn = clean(F.ven.value), hv = $('#hVen');
+  if (vn && S.vendors.length && !S.vendors.some(v => v.name === vn)) { hv.textContent = '귀책 목록에 없는 이름이에요.'; hv.className = 'hint w'; }
+  else { hv.textContent = ''; hv.className = 'hint'; }
+  const q = clean(F.qty.value);
+  $('#out').textContent = [
+    `1. ${clean(F.proj.value)}`,
+    `2. ${clean(F.pn.value).toUpperCase()}`,
+    `3. ${q ? q + ' EA' : ''}`,
+    `4. ${clean(F.txt.value)}`,
+    `5. ${vn}`,
+  ].join('\n');
+  const miss = [['프로젝트명',F.proj],['품번',F.pn],['수량',F.qty],['불량내용',F.txt],['귀책',F.ven]].filter(([,e]) => !clean(e.value)).map(([n]) => n);
+  const wo = $('#wOut'); wo.style.display = miss.length ? '' : 'none'; wo.textContent = miss.length ? '비어 있는 칸: ' + miss.join(', ') : '';
+}
+function setField(k, v, kind, label){
+  F[k].value = v || ''; auto[k] = v ? clean(v) : '';
+  tag('#t'+k[0].toUpperCase()+k.slice(1), v ? kind : '', v ? label : '');
+}
+function showCands(list){
+  const box = $('#cPn');
+  box.innerHTML = list.length ? '<span class="mut" style="width:100%">정확히 못 읽었어요. 맞는 품번을 눌러 주세요.</span>' + list.map(c =>
+    `<button class="chip" type="button" data-pn="${esc(c.pn)}">${esc(c.pn)}<small>${esc(fmtName(c.name))}</small></button>`).join('') : '';
+}
+function showProjAlt(list){
+  $('#cProj').innerHTML = list.length ? '<span class="mut" style="width:100%">다르게 읽힌 값도 있어요. 맞는 걸 눌러 주세요.</span>'
+    + [clean(F.proj.value), ...list].filter(Boolean).map(v => `<button class="chip" type="button" data-v="${esc(v)}">${esc(v)}</button>`).join('') : '';
+}
+$('#cProj').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; F.proj.value = b.dataset.v; auto.proj=''; tag('#tProj','',''); showProjAlt([]); refresh(); });
+$('#cPn').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; F.pn.value = b.dataset.pn; auto.pn=''; tag('#tPn','',''); showCands([]); refresh(); });
+
+async function onFile(file){
+  if (!file) return;
+  $('#shot').style.display = 'flex'; $('#pM').textContent = ''; step('사진 여는 중…', 2);
+  ['proj','pn','qty','ven'].forEach(k => setField(k, '')); showCands([]); showProjAlt([]); refresh();
+  $('#bCam').disabled = $('#bAlb').disabled = true;
+  const t0 = performance.now();
+  onOcrProg = m => { if (m.status === 'loading language traineddata' && m.progress < 1) $('#pM').textContent = '인식 도구 내려받는 중 ' + Math.round(m.progress*100) + '%'; };
+  try {
+    const r = await recognize(file);
+    window.__last = r;
+    if (r.pn) setField('pn', r.pn.pn, r.pn.check || !r.pn.known ? 'chk' : 'auto', r.via === 'QR' ? (r.pn.known ? 'QR 인식' : 'QR · 목록에 없음') : (r.pn.check ? '확인 필요' : '자동 인식'));
+    showCands(r.pn ? [] : r.cands);
+    if (r.proj) setField('proj', r.proj.name, r.proj.check ? 'chk' : 'auto', r.proj.check ? '확인 필요' : '자동 인식');
+    showProjAlt(r.projAlt || []);
+    if (r.qty) setField('qty', r.qty, 'auto', '자동 인식');
+    if (r.ven) setField('ven', r.ven.name, r.ven.s >= 1 ? 'auto' : 'chk', r.ven.s >= 1 ? '자동 인식' : '확인 필요');
+    const got = [r.proj && '프로젝트', r.pn && '품번', r.qty && '수량', r.ven && '귀책'].filter(Boolean);
+    step(got.length ? '인식 완료' : '읽은 내용이 없어요. 직접 입력해 주세요.', 100);
+    $('#pM').textContent = (r.drawing ? '도면 사진 · ' : '') + (got.length ? got.join(', ') + ' 채움' : '') + ` · ${((performance.now()-t0)/1000).toFixed(1)}초`
+      + (r.drawing ? ' · 도면에는 프로젝트·수량·귀책이 없어 직접 입력해 주세요' : '');
+    refresh();
+    if (!clean(F.txt.value)) F.txt.focus({ preventScroll:true });
+  } catch(e) {
+    console.error(e); step('인식 실패: ' + (e.message || e), 100); $('#pM').textContent = '인터넷 연결을 확인하거나 직접 입력해 주세요.';
+  } finally {
+    $('#bCam').disabled = $('#bAlb').disabled = false; onOcrProg = null;
+  }
+}
+for (const [b, f] of [['#bCam','#fCam'],['#bAlb','#fAlb']]) {
+  $(b).addEventListener('click', () => { $(f).value = ''; $(f).click(); ocrWorker().catch(()=>{}); zx().catch(()=>{}); });   // 고르는 동안 도구를 미리 받기 시작
+  $(f).addEventListener('change', e => onFile(e.target.files[0]));
+}
+$('#bNew').addEventListener('click', () => { Object.keys(F).forEach(k => setField(k, '')); showCands([]); showProjAlt([]); $('#shot').style.display = 'none'; refresh(); F.proj.focus(); });
+
+/* 검색 드롭다운 (초성 검색 지원) */
+function matchScore(q, s){
+  const l = s.toLowerCase(), c = choseong(l);
+  if (l.startsWith(q.l)) return 5; if (l.includes(q.l)) return 4;
+  if (q.n.length >= 3 && normC(s).includes(q.n)) return 3;
+  if (q.c && c.startsWith(q.c)) return 2; if (q.c && c.includes(q.c)) return 1; return 0;
+}
+function combo(input, dd, source, onPick){
+  let act = -1, items = [];
+  const show = () => {
+    const raw = splitJamo(clean(input.value)); const q = { l: raw.toLowerCase(), n: normC(raw), c: /[ㄱ-ㅎ]/.test(raw) ? choseong(raw.toLowerCase()) : '' };
+    const all = source();
+    items = (!raw ? all.slice(0, 30) : all.map(x => ({ x, s: Math.max(matchScore(q, x.v), x.sub ? matchScore(q, x.sub) - 1 : 0) })).filter(o => o.s > 0)
+      .sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x));
+    act = -1;
+    dd.innerHTML = items.map((x,i) => `<div data-i="${i}"><span>${esc(x.v)}</span>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</div>`).join('');
+    dd.style.display = items.length && document.activeElement === input ? 'block' : 'none';
+  };
+  const pick = i => { if (!items[i]) return; input.value = items[i].v; dd.style.display = 'none'; onPick && onPick(items[i]); refresh(); };
+  input.addEventListener('input', () => { show(); refresh(); });
+  input.addEventListener('focus', show);
+  input.addEventListener('blur', () => setTimeout(() => dd.style.display = 'none', 150));
+  input.addEventListener('keydown', e => {
+    if (dd.style.display !== 'block') return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); act = Math.max(0, Math.min(items.length-1, act + (e.key === 'ArrowDown' ? 1 : -1)));
+      [...dd.children].forEach((d,i) => d.classList.toggle('act', i === act)); dd.children[act]?.scrollIntoView({ block:'nearest' }); }
+    else if (e.key === 'Enter' && act >= 0) { e.preventDefault(); pick(act); }
+    else if (e.key === 'Escape') dd.style.display = 'none';
+  });
+  dd.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
+}
+let srcProj = null, srcPn = null, srcVen = null;
+combo(F.proj, $('#dProj'), () => srcProj ||= S.proj.map(p => ({ v:p.name, sub:p.type })));
+combo(F.pn, $('#dPn'), () => srcPn ||= [...S.parts.values()].map(p => ({ v:p.pn, sub:fmtName(p.name) })), () => showCands([]));
+combo(F.ven, $('#dVen'), () => srcVen ||= S.vendors.map(v => ({ v:v.name, sub:v.big })));
+F.qty.addEventListener('input', refresh); F.txt.addEventListener('input', refresh);
+
+/* 복사 */
+async function copyText(t){
+  try { await navigator.clipboard.writeText(t); return true; } catch(e) {}
+  const ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch(e) {} ta.remove(); return ok;
+}
+$('#bCopy').addEventListener('click', async () => { refresh(); toast(await copyText($('#out').textContent) ? '복사했어요' : '복사하지 못했어요. 길게 눌러 복사해 주세요'); });
+
+refresh();
+loadAll().then(() => { srcProj = srcPn = srcVen = null; refresh(); });
+</script>
+</body>
+</html>

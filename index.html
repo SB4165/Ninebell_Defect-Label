@@ -57,6 +57,9 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .chip{font:inherit;font-size:12px;border:1px solid var(--bd);border-radius:2em;padding:3px 10px;background:var(--bg2);cursor:pointer;color:var(--fg);text-align:left}
 .chip:hover{border-color:var(--acc)}
 .chip small{color:var(--mut);margin-left:4px}
+.ask{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.btn.askb.on{background:var(--warn-bg);border-color:var(--warn);color:var(--warn);font-weight:600}
+.btn.askb.on::before{content:'✓ '}
 .qty{display:flex;align-items:center;gap:6px}
 .qty input{max-width:120px}
 .qty span{color:var(--mut);font-size:13px;font-weight:600}
@@ -128,6 +131,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
         <label for="iVen"><span class="no">5</span>귀책 <span class="tag" id="tVen"></span></label>
         <div class="combo"><input id="iVen" autocomplete="off" placeholder="입력 필요 · 업체명 초성 검색 (예: ㅇㅍ)"><div class="dd" id="dVen"></div></div>
         <div class="hint" id="hVen"></div>
+        <div class="ask"><button class="btn sm askb" id="bAsk" type="button">확인요청</button><span class="mut">귀책 확인이 필요한 경우 클릭</span></div>
       </div>
       <div class="f">
         <label for="iReq"><span class="no">6</span>요청자 <span class="tag" id="tReq"></span></label>
@@ -157,6 +161,7 @@ const CONFIG = {
   PROJ:  { names: y=>[`참조(${y})`,`참조 (${y})`], gid: '664632288', range: 'L1:M5000', merge: true },  // 프로젝트 발주명, 올해+작년 합침
   PARTS: { gid: '1577658176', range: 'A:L' },   // 품명/품번 시트: 품번·품명·발견자(요청자). 행 수 제한 없이 끝까지 읽음 (2026-10 기준 약 7.8만 행)
   // 라벨에 적힌 업체 이름 → 시트(귀책 목록)에 있는 이름. 왼쪽은 (주)·㈜·주식회사·공백·점을 뺀 글자로 적기
+  ASK_VENDOR: '확인요청',   // 귀책을 모를 때 [확인요청] 버튼을 누르면 귀책 칸에 들어가는 글자
   VENDOR_ALIAS: {
     '브이피시스템': 'VP시스템',
     '한국메카트로닉스': '한국메카',
@@ -651,7 +656,9 @@ function refresh(){
   if (pr && S.proj.length && !S.proj.some(p => p.k === key(pr))) { hj.textContent = '프로젝트 목록에 없는 이름이에요. 맞는지 확인해 주세요.'; hj.className = 'hint w'; }
   else { hj.textContent = ''; hj.className = 'hint'; }
   const vn = clean(F.ven.value), hv = $('#hVen');
-  if (vn && S.vendors.length && !S.vendors.some(v => v.name === vn)) { hv.textContent = '귀책 목록에 없는 이름이에요.'; hv.className = 'hint w'; }
+  const asking = vn === CONFIG.ASK_VENDOR;
+  $('#bAsk').classList.toggle('on', asking);
+  if (vn && !asking && S.vendors.length && !S.vendors.some(v => v.name === vn)) { hv.textContent = '귀책 목록에 없는 이름이에요.'; hv.className = 'hint w'; }
   else { hv.textContent = ''; hv.className = 'hint'; }
   const rq = clean(F.req.value), hr = $('#hReq');
   if (rq && S.finders.length && !S.finders.includes(rq)) { hr.textContent = '명단에 없는 이름이에요.'; hr.className = 'hint w'; }
@@ -682,6 +689,12 @@ function showProjAlt(list){
   $('#cProj').innerHTML = list.length ? '<span class="mut" style="width:100%">다르게 읽힌 값도 있어요. 맞는 걸 눌러 주세요.</span>'
     + [clean(F.proj.value), ...list].filter(Boolean).map(v => `<button class="chip" type="button" data-v="${esc(v)}">${esc(v)}</button>`).join('') : '';
 }
+// 귀책 확인요청: 누르면 귀책 칸에 '확인요청', 다시 누르면 지움
+$('#bAsk').addEventListener('click', () => {
+  const on = clean(F.ven.value) === CONFIG.ASK_VENDOR;
+  setField('ven', on ? '' : CONFIG.ASK_VENDOR); refresh();
+  toast(on ? '확인요청을 취소했어요' : '귀책을 확인요청으로 넣었어요');
+});
 $('#cProj').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; F.proj.value = b.dataset.v; auto.proj=''; tag('#tProj','',''); showProjAlt([]); refresh(); });
 $('#cPn').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; F.pn.value = b.dataset.pn; auto.pn=''; tag('#tPn','',''); showCands([]); refresh(); });
 

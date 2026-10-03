@@ -181,6 +181,15 @@ const PASS = {
   titleBlock: { x:0.5, y:0.72, w:0.5, h:0.28 },                    // 도면 표제란 위치(오른쪽 아래)
   zoom:  { scale:2,   maxDim:2400 },
   moire: { scale:1,   maxDim:1600, blur:2, ch:'lum' },             // 모니터를 찍은 사진(물결무늬)
+  qrBoxFixed: [-4.5, 8.5, -6.5, 3.5], // 라벨 종이를 못 찾았을 때 쓸 범위 (QR 한 변 = 1칸)
+  qrBoxMin: [-3, 7, -4.5, 2.5],     // 라벨을 찾았어도 항상 포함할 QR 둘레 범위
+  inkRatio: 0.6,                    // 흑백 기준: 종이 밝기의 60%보다 어두우면 글자
+  qrSidePx: 380,                    // 라벨을 잘라낼 때 QR 한 변을 몇 픽셀로 맞출지 (글자 크기 결정)
+  qrBox: [-9, 9, -7.5, 4.5],        // 라벨을 찾을 범위, QR 중심 기준 (QR 한 변 = 1칸): 왼쪽, 오른쪽, 위, 아래
+  paperTh: [0.9, 0.94, 0.97], paperStep: 14,   // 라벨 종이 찾기: QR 둘레 밝기의 90%(번지면 94%, 97%) 이상 + 이웃 점과 밝기 차이 14 이하
+  bigPhoto: 1600,                   // 이보다 큰 사진(휴대폰 원본)은 라벨만 잘라서 읽음
+  orient: { maxDim:1600, psm:'11' },// QR이 없을 때 방향 찾기용 빠른 읽기
+  wordPx: 34,                       // QR 없이 글자 영역을 잘라 다시 읽을 때 글자 높이를 몇 픽셀로 맞출지
 };
 const QS = new URLSearchParams(location.search);
 const LIB = QS.get('lib') || CONFIG.LIB;     // 시험용: ?lib=로 라이브러리 위치를 바꿀 수 있음
@@ -205,6 +214,7 @@ const normC = s => String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'')
   .replace(/[OQD]/g,'0').replace(/[IL]/g,'1').replace(/Z/g,'2').replace(/S/g,'5').replace(/B/g,'8').replace(/G/g,'6');
 // 업체 이름 대조용: (주)·㈜·주식회사·공백·점 제거
 const normV = s => String(s||'').toUpperCase().replace(/\(주\)|㈜|주식회사|\(유\)|\(株\)|\(쥐\)|\(추\)/g,'').replace(/[^0-9A-Z가-힣]/g,'');
+const normP = s => normC(s).replace(/C/g, '0');   // 프로젝트 비교용: C를 0으로 읽는 경우까지 같은 값으로
 const normN = s => String(s||'').toUpperCase().replace(/[^0-9A-Z가-힣]/g,'');
 function lev(a, b, max){
   const m=a.length, n=b.length; if (Math.abs(m-n)>max) return max+1;
@@ -317,7 +327,7 @@ function parseFinders(rows){
 
 /* ================== 상태 / 데이터 불러오기 ================== */
 const S = { parts:new Map(), proj:[], vendors:[], finders:[], ld:{} };
-const IX = { pn:new Map(), tri:new Map(), list:[], proj:[], ven:[] };
+const IX = { pn:new Map(), tri:new Map(), list:[], proj:[], ven:[], projBase:new Map() };
 function buildIndex(){
   IX.list = [...S.parts.values()].map(p => ({ p, n:normC(p.pn), nm:normN(p.name) }));
   IX.pn = new Map(); IX.tri = new Map();
@@ -328,6 +338,10 @@ function buildIndex(){
   });
   const pm = new Map(); S.proj.forEach(p => { if (!pm.has(p.k)) pm.set(p.k, p); });
   IX.proj = [...pm.values()].map(p => ({ name:p.name, n:normC(p.name) })).filter(p => p.n.length >= 4);
+  // 'TF01-033 EFEM' / 'TF01-033 PROCESS'처럼 끝말만 다른 이름 → 기본 이름 'TF01-033'으로 묶음
+  IX.projBase = new Map(); IX.projByN = null; IX.projP = null;
+  for (const p of IX.proj) { const base = p.name.replace(/\s+(EFEM|PROCESS)\s*$/i, ''); const n = normC(base); if (n.length < 5) continue;
+    if (!IX.projBase.has(n)) IX.projBase.set(n, { base, list:[] }); IX.projBase.get(n).list.push(p); }
   const vm = new Map();
   S.vendors.forEach(v => { const n = normV(v.name); if (n && !vm.has(n)) vm.set(n, v.name); });
   for (const [a, b] of Object.entries(CONFIG.VENDOR_ALIAS)) { const n = normV(a); if (n) vm.set(n, b); }
@@ -380,21 +394,57 @@ function prep(img, { rot=0, crop=null, maxDim=2000, minDim=0, scale=0, gray=true
   x.translate(cv.width/2, cv.height/2); x.rotate(rot*Math.PI/180);
   x.drawImage(img, sx, sy, sw, sh, -w/2, -h/2, w, h);
   x.setTransform(1,0,0,1,0,0);
-  if (gray || blur) {
-    const d = x.getImageData(0,0,cv.width,cv.height), a = d.data, n = cv.width*cv.height;
-    let g = new Float32Array(n);
-    for (let i=0;i<n;i++) g[i] = ch === 'lum' ? 0.299*a[i*4] + 0.587*a[i*4+1] + 0.114*a[i*4+2]
-      : Math.min(a[i*4], a[i*4+1], a[i*4+2]);   // 가장 어두운 색 채널 → 도면의 하늘색 글자도 진하게
-    for (let k=0;k<blur;k++) g = boxBlur(g, cv.width, cv.height);
-    // 대비 늘리기: 하위 2% → 검정, 상위 2% → 흰색
-    const hist = new Uint32Array(256); for (let i=0;i<n;i++) hist[g[i]|0]++;
-    let lo=0, hi=255, acc=0; for (; lo<255; lo++){ acc+=hist[lo]; if (acc>n*0.02) break; }
-    acc=0; for (; hi>0; hi--){ acc+=hist[hi]; if (acc>n*0.02) break; }
-    const r = Math.max(1, hi-lo);
-    for (let i=0;i<n;i++){ const v = Math.max(0, Math.min(255, (g[i]-lo)*255/r)); a[i*4]=a[i*4+1]=a[i*4+2]=v; }
-    x.putImageData(d,0,0);
+  // 이 캔버스 좌표 → 원본 사진 좌표로 되돌리는 데 필요한 값
+  cv._map = (u, v) => { const a = -rot*Math.PI/180, du = u - cv.width/2, dv = v - cv.height/2;
+    return [ (du*Math.cos(a) - dv*Math.sin(a) + w/2) / s + sx, (du*Math.sin(a) + dv*Math.cos(a) + h/2) / s + sy ]; };
+  cv._s = s;
+  return enhance(cv, { gray, blur, ch });
+}
+// 원본 사진에서 임의 각도로 기울어진 사각형을 잘라 똑바로 펴기
+//   (cx,cy): 기준점(원본 좌표), ang: 라벨 가로 방향의 각도(라디안), x0~x1 / y0~y1: 기준점에서의 범위(원본 픽셀), k: 확대 배율
+function cropRot(img, { cx, cy, ang, x0, x1, y0, y1, k, gray=true, ch='min', blur=0, bin=false }){
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round((x1-x0)*k)); cv.height = Math.max(1, Math.round((y1-y0)*k));
+  const x = cv.getContext('2d', { willReadFrequently:true });
+  x.fillStyle = '#fff'; x.fillRect(0,0,cv.width,cv.height);
+  x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  const co = Math.cos(ang)*k, si = Math.sin(ang)*k;
+  x.setTransform(co, -si, si, co, -co*cx - si*cy - k*x0, si*cx - co*cy - k*y0);
+  x.drawImage(img, 0, 0);
+  x.setTransform(1,0,0,1,0,0);
+  return enhance(cv, { gray, blur, ch, bin });
+}
+function enhance(cv, { gray=true, blur=0, ch='min', bin=false } = {}){
+  if (!gray && !blur && !bin) return cv;
+  const x = cv.getContext('2d', { willReadFrequently:true });
+  const d = x.getImageData(0,0,cv.width,cv.height), a = d.data, n = cv.width*cv.height;
+  let g = new Float32Array(n);
+  for (let i=0;i<n;i++) g[i] = ch === 'lum' ? 0.299*a[i*4] + 0.587*a[i*4+1] + 0.114*a[i*4+2]
+    : Math.min(a[i*4], a[i*4+1], a[i*4+2]);   // 가장 어두운 색 채널 → 도면의 하늘색 글자도 진하게
+  for (let k=0;k<blur;k++) g = boxBlur(g, cv.width, cv.height);
+  if (bin) {   // 흑백 두 색으로. 숫자면 '종이 밝기 × 그 비율'을 기준으로 (스티로폼·비닐처럼 밝은 회색 무늬는 흰색으로 사라짐)
+    let th;
+    if (typeof bin === 'number') { const s2 = Float32Array.from(g).sort(); th = s2[Math.floor(n*0.95)] * bin; }
+    else th = otsu(g);
+    for (let i=0;i<n;i++){ const v = g[i] > th ? 255 : 0; a[i*4]=a[i*4+1]=a[i*4+2]=v; }
+    x.putImageData(d,0,0); return cv;
   }
+  // 대비 늘리기: 하위 2% → 검정, 상위 2% → 흰색
+  const hist = new Uint32Array(256); for (let i=0;i<n;i++) hist[g[i]|0]++;
+  let lo=0, hi=255, acc=0; for (; lo<255; lo++){ acc+=hist[lo]; if (acc>n*0.02) break; }
+  acc=0; for (; hi>0; hi--){ acc+=hist[hi]; if (acc>n*0.02) break; }
+  const r = Math.max(1, hi-lo);
+  for (let i=0;i<n;i++){ const v = Math.max(0, Math.min(255, (g[i]-lo)*255/r)); a[i*4]=a[i*4+1]=a[i*4+2]=v; }
+  x.putImageData(d,0,0);
   return cv;
+}
+function otsu(g){
+  const h = new Float64Array(256), n = g.length; for (let i=0;i<n;i++) h[Math.max(0, Math.min(255, g[i]|0))]++;
+  let sum = 0; for (let i=0;i<256;i++) sum += i*h[i];
+  let sB = 0, wB = 0, best = -1, th = 128;
+  for (let t=0;t<256;t++){ wB += h[t]; if (!wB) continue; const wF = n - wB; if (!wF) break; sB += t*h[t];
+    const v = wB*wF*(sB/wB - (sum-sB)/wF)**2; if (v > best) { best = v; th = t; } }
+  return th;
 }
 function boxBlur(g, w, h){
   const o = new Float32Array(g.length);
@@ -429,25 +479,90 @@ function ocrWorker(){
 /* ================== QR / 바코드 ================== */
 async function readCodes(img){
   const Z = await zx();
+  const W = img.naturalWidth || img.width;
   const tries = [ { maxDim:1600, gray:false }, { maxDim:2400, minDim:1400, gray:true }, { maxDim:2400, minDim:2400, gray:false } ];
   const all = [], seen = new Set();
   for (const t of tries) {
-    const cv = prep(img, t);
+    const cv = prep(img, t), sc = cv.width / W;
     const id = cv.getContext('2d').getImageData(0,0,cv.width,cv.height);
     let res = [];
-    try { res = await Z.readBarcodes(id, { tryHarder:true, maxNumberOfSymbols:6 }); } catch(e) {}
-    for (const r of res) if (r.isValid && r.text && !seen.has(r.text)) { seen.add(r.text); all.push(r); }
+    // QR·DataMatrix·Code128만 (스티로폼·상자 무늬가 다른 바코드로 잘못 읽히는 것 방지)
+    try { res = await Z.readBarcodes(id, { tryHarder:true, maxNumberOfSymbols:6, formats:['QRCode','DataMatrix','Code128'] }); } catch(e) {}
+    for (const r of res) if (r.isValid && r.text && !seen.has(r.text)) { seen.add(r.text); r.geo = codeGeo(r, sc); all.push(r); }
     if (all.some(r => codePart(r.text))) break;   // 품번이 든 코드를 찾으면 그만
   }
   return all;
 }
 const codePart = t => S.parts.get(key(t)) || (IX.pn.get(normC(t)) || []).map(j => IX.list[j].p)[0];
-// QR 기울기로 사진 방향 판단 → OCR을 바로 그 방향으로
-function rotFromCode(r){
+// QR 네 모서리 → 원본 사진에서의 중심·한 변 길이·기울기(라디안)
+function codeGeo(r, sc){
   const p = r.position; if (!p) return null;
-  const ang = Math.atan2(p.topRight.y - p.topLeft.y, p.topRight.x - p.topLeft.x) * 180 / Math.PI;
-  const q = ((Math.round(ang/90) % 4) + 4) % 4;
+  const P = k => [p[k].x / sc, p[k].y / sc];
+  const tl = P('topLeft'), tr = P('topRight'), bl = P('bottomLeft'), br = P('bottomRight');
+  const cx = (tl[0]+tr[0]+bl[0]+br[0])/4, cy = (tl[1]+tr[1]+bl[1]+br[1])/4;
+  const side = (Math.hypot(tr[0]-tl[0], tr[1]-tl[1]) + Math.hypot(bl[0]-tl[0], bl[1]-tl[1])) / 2;
+  return { cx, cy, side, ang: Math.atan2(tr[1]-tl[1], tr[0]-tl[0]) };
+}
+// QR 기울기 → 90도 단위 방향 (도면 표제란 등 기존 처리용)
+function rotFromCode(r){
+  if (!r.geo) return null;
+  const q = ((Math.round(r.geo.ang*180/Math.PI/90) % 4) + 4) % 4;
   return (4 - q) % 4 * 90;
+}
+// QR 둘레의 라벨 영역을 잘라 똑바로 펴기
+//   ① 넓게(QR 기준 왼쪽 4.5칸~오른쪽 9칸, 위 7.5칸~아래 4칸) 작게 잘라서
+//   ② QR 바로 바깥 여백(= 라벨 종이) 밝기에서 시작해 비슷하게 밝은 곳을 따라가 라벨 테두리를 찾고
+//   ③ 그 라벨만 크게(QR 한 변 ≈ 300px) 다시 잘라 흑백으로
+function labelBox(img, g){
+  const u = g.side, b = PASS.qrBox, k = 60 / u;
+  const cv = cropRot(img, { cx:g.cx, cy:g.cy, ang:g.ang, x0:b[0]*u, x1:b[1]*u, y0:b[2]*u, y1:b[3]*u, k, gray:false });
+  const W = cv.width, H = cv.height, a = cv.getContext('2d').getImageData(0,0,W,H).data;
+  const L0 = new Float32Array(W*H); for (let i=0;i<W*H;i++) L0[i] = 0.299*a[i*4] + 0.587*a[i*4+1] + 0.114*a[i*4+2];
+  const L = new Float32Array(W*H);   // 주변 3x3 중 가장 밝은 값 → 얇은 표 선과 글자는 지워지고 종이만 남음
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++) { let m = 0;
+    for (let dy=-1;dy<=1;dy++) { const yy = y+dy; if (yy<0||yy>=H) continue; for (let dx=-1;dx<=1;dx++) { const xx = x+dx; if (xx<0||xx>=W) continue; const v = L0[yy*W+xx]; if (v > m) m = v; } }
+    L[y*W+x] = m; }
+  const ox = -b[0]*u*k, oy = -b[2]*u*k, r = u*k;          // QR 중심의 캔버스 좌표, QR 한 변(px)
+  const ring = [];
+  for (let y=Math.floor(oy-0.75*r); y<=oy+0.75*r; y++) for (let x=Math.floor(ox-0.75*r); x<=ox+0.75*r; x++) {
+    const m = Math.max(Math.abs(x-ox), Math.abs(y-oy)); if (m < 0.56*r || x<0||y<0||x>=W||y>=H) continue; ring.push(y*W+x); }
+  if (!ring.length) return null;
+  const vals = ring.map(i => L[i]).sort((p,q) => p-q), paper = vals[Math.floor(vals.length*0.7)];
+  // 종이 밝기 기준을 점점 엄격하게 하며, 배경(스티로폼 등)으로 번지지 않는 첫 결과를 씀
+  let last = null;
+  for (const th of PASS.paperTh) {
+    const T = paper * th, seen = new Uint8Array(W*H), st = ring.filter(i => L[i] >= T); st.forEach(i => seen[i] = 1);
+    let x0 = W, x1 = 0, y0 = H, y1 = 0;
+    while (st.length) { const i = st.pop(), x = i % W, y = (i / W) | 0;
+      if (x<x0) x0=x; if (x>x1) x1=x; if (y<y0) y0=y; if (y>y1) y1=y;
+      for (const j of [i-1, i+1, i-W, i+W]) if (j>=0 && j<W*H && !seen[j] && Math.abs((j%W)-x) <= 1 && L[j] >= T && Math.abs(L[j]-L[i]) <= PASS.paperStep) { seen[j] = 1; st.push(j); } }   // 매끈한 종이만 따라감
+    // 가늘게 번진 부분 잘라내기: 종이가 거의 없는 행·열은 버림
+    const trim = (n, at0, at) => { const c = new Float32Array(n); for (let i=0;i<W*H;i++) if (seen[i]) c[at(i)]++;
+      const mx = Math.max(...c), keep = v => v >= mx * 0.15; let a = Math.min(n-1, Math.max(0, Math.round(at0))), b = a;
+      while (a > 0 && keep(c[a-1])) a--; while (b < n-1 && keep(c[b+1])) b++; return [a, b]; };
+    const [tx0, tx1] = trim(W, ox, i => i % W), [ty0, ty1] = trim(H, oy, i => (i / W) | 0);
+    x0 = Math.max(x0, tx0); x1 = Math.min(x1, tx1); y0 = Math.max(y0, ty0); y1 = Math.min(y1, ty1);
+    x0 = Math.min(x0, ox-0.6*r); x1 = Math.max(x1, ox+0.6*r); y0 = Math.min(y0, oy-0.6*r); y1 = Math.max(y1, oy+0.6*r);
+    const edges = (x0 <= 1) + (y0 <= 1) + (x1 >= W-2) + (y1 >= H-2);
+    last = { x0, x1, y0, y1 };
+    if (edges < 2 && (x1-x0)*(y1-y0) < 0.6*W*H) break;   // 번지지 않았으면 이 결과 사용
+    last.leak = true;
+  }
+  if (!last || last.leak && (last.x1-last.x0)*(last.y1-last.y0) > 0.6*W*H) return null;
+  const m = 0.45*r;   // 테두리에 걸친 글자를 위해 조금 넓게
+  return { x0:(last.x0-m-ox)/k, x1:(last.x1+m-ox)/k, y0:(last.y0-m-oy)/k, y1:(last.y1+m-oy)/k };
+}
+function labelFromCode(img, g, opt = {}){
+  const u = g.side, f = PASS.qrBoxFixed;
+  let box = labelBox(img, g);
+  // 라벨 종이를 못 찾았거나(배경으로 번짐) 너무 작게 잡히면(표 선에 막힘) QR 둘레 넉넉한 범위로
+  if (!box || (box.x1-box.x0)*(box.y1-box.y0) < 12*u*u) box = { x0:f[0]*u, x1:f[1]*u, y0:f[2]*u, y1:f[3]*u };
+  else { const m = 0.6*u, n = PASS.qrBoxMin;   // 찾은 라벨 + 여유, 그리고 QR 둘레 최소 범위는 항상 포함
+    box = { x0:Math.min(box.x0-m, n[0]*u), x1:Math.max(box.x1+m, n[1]*u), y0:Math.min(box.y0-m, n[2]*u), y1:Math.max(box.y1+m, n[3]*u) }; }
+  let k = Math.min(3, PASS.qrSidePx / u);
+  k = Math.min(k, 2400 / Math.max(box.x1-box.x0, box.y1-box.y0));
+  const cv = cropRot(img, { cx:g.cx, cy:g.cy, ang:g.ang, ...box, k, bin:PASS.inkRatio, ...opt });
+  cv._box = box; return cv;
 }
 
 /* ================== 글자에서 정보 찾기 ================== */
@@ -485,9 +600,23 @@ function partCands(text){
 function findProj(text){
   const lines = String(text).split('\n').map(l => l.replace(/PUR\s*\d{6,}/gi,' '));
   // ① '프로젝트명 :' / 'Project |' 바로 뒤의 글자
-  const anc = [...String(text).matchAll(/(?:프로젝트명?|PROJECT(?:\s*NAME)?)[\s:：|.]*([^\s,，、]+)/gi)].map(m => m[1]).filter(t => normC(t).length >= 4);
+  const anc = [...String(text).matchAll(/(?:프로젝트(?:명|번호)?|PROJECT(?:\s*NAME)?)[\s:：|.]*([^\s,，、.]+)/gi)].map(m => m[1]).filter(t => normC(t).length >= 4);
   for (const t of anc) { const n = normC(t); const p = IX.proj.find(p => p.n === n); if (p) return { name:p.name, known:true }; }
-  // ② 글 전체에서 목록의 프로젝트명 찾기
+  // ② 단어 단위로 목록과 비교 (쉼표·띄어쓰기로 나뉜 1~3단어 묶음). 'CC04-160, 12CH PROCESS'처럼 뒤에 숫자가 붙어도 정확히 구분
+  const byN = IX.projByN ||= new Map(IX.proj.map(p => [p.n, p]));
+  for (const line of lines) {
+    const toks = line.split(/[\s,，、;|()\[\]]+/).filter(Boolean);
+    for (let k = 3; k >= 1; k--) for (let i = 0; i + k <= toks.length; i++) {
+      const raw = toks.slice(i, i+k).join(' '), n = normC(raw); if (n.length < 5) continue;
+      if (byN.has(n)) return { name: byN.get(n).name, known: true };
+      const e = IX.projBase.get(n); if (!e) continue;
+      if (e.list.length === 1) return { name: e.list[0].name, known: true };
+      const kw = /EFEM/i.test(line) ? 'EFEM' : /PR[O0]CESS|프로세스/i.test(line) ? 'PROCESS' : /EFEM/i.test(text) ? 'EFEM' : /PR[O0]CESS/i.test(text) ? 'PROCESS' : '';
+      const pick = kw && e.list.find(p => new RegExp(kw + '\\s*$', 'i').test(p.name));
+      return pick ? { name: pick.name, known: true } : { name: e.base, known: false };
+    }
+  }
+  // ②-1 붙어 있는 글자 속에서 목록의 프로젝트명 찾기
   let best = null;
   for (const line of lines) {
     const L = normC(line); if (L.length < 4) continue;
@@ -499,6 +628,37 @@ function findProj(text){
     }
   }
   if (best) return { name: best.name, known: true };
+  // ②-2 기본 이름으로 찾고 EFEM/PROCESS는 라벨 글자로 고르기 (TF01-033, 8CH-L3 EFEM → TF01-033 EFEM)
+  for (const line of lines) {
+    const L = normC(line); if (L.length < 5) continue;
+    for (const [n, e] of IX.projBase) {
+      const i = L.indexOf(n); if (i < 0) continue;
+      if (/[0-9]/.test(L[i + n.length] || '') && /[0-9]$/.test(n)) continue;
+      if (i > 0 && /[0-9]/.test(L[i-1]) && /^[0-9]/.test(n)) continue;
+      if (e.list.length === 1) return { name: e.list[0].name, known: true };
+      const kw = /EFEM/i.test(line) ? 'EFEM' : /PROCESS|PR0CESS|프로세스/i.test(line) ? 'PROCESS' : /EFEM/i.test(text) ? 'EFEM' : /PROCESS/i.test(text) ? 'PROCESS' : '';
+      const pick = kw && e.list.find(p => new RegExp(kw + '\\s*$', 'i').test(p.name));
+      return pick ? { name: pick.name, known: true } : { name: e.base, known: false };
+    }
+  }
+  // ②-3 C↔0을 같은 글자로 보고 다시 비교 (CC04-160 → 0004-160)
+  const pick2 = (e, line) => { if (e.list.length === 1) return e.list[0].name;
+    const kw = /EFEM/i.test(line) ? 'EFEM' : /PR[O0]CESS/i.test(line) ? 'PROCESS' : /EFEM/i.test(text) ? 'EFEM' : /PR[O0]CESS/i.test(text) ? 'PROCESS' : '';
+    const p = kw && e.list.find(p => new RegExp(kw + '\\s*$', 'i').test(p.name)); return p ? p.name : null; };
+  const PN = IX.projP ||= (() => { const m = new Map();
+    for (const p of IX.proj) m.set(normP(p.name), { base:p.name, list:[p] });
+    for (const [, e] of IX.projBase) { const k = normP(e.base); if (!m.has(k)) m.set(k, e); }
+    return m; })();
+  for (const line of lines) {
+    const toks = line.split(/[\s,，、;|()\[\].]+/).filter(Boolean);
+    for (let k = 2; k >= 1; k--) for (let i = 0; i + k <= toks.length; i++) {
+      const n = normP(toks.slice(i, i+k).join(' ')); if (n.length < 6) continue;
+      const e = PN.get(n); if (e) { const nm = pick2(e, line); return { name: nm || e.base, known: !!nm, weak: true }; }
+      // 앞 글자 하나가 빠진 경우 (F01-033 → TF01-033)
+      const cands = [...PN].filter(([k2]) => k2.length === n.length + 1 && k2.endsWith(n) && /^[A-Z]/.test(k2));
+      if (cands.length === 1) { const e2 = cands[0][1], nm = pick2(e2, line); return { name: nm || e2.base, known: !!nm, weak: true }; }
+    }
+  }
   // ③ 라벨 뒤 글자가 조금 틀린 경우(CJ07-122 → <)07-122): 가장 가까운 것 하나만 있으면 채택
   for (const t of anc) {
     const n = normC(t); let md = 3, hit = [];
@@ -511,15 +671,19 @@ function findProj(text){
     const p = IX.proj.find(p => p.n.length === n.length + 1 && p.n.endsWith(n) && /[A-Z]/.test(p.name[0]));
     if (p) return { name: p.name, known: true, weak: true };
   }
-  const m = String(text).match(/\b(ECP\s?\d{3}|[A-Z]{2}\d{2}-\d{3})\b/);
+  const m = String(text).match(/\b(ECP\s?\d{3}|[A-Z]{2}\d{2}-\d{3}|MISC-[A-Z0-9]+\s?#\d+)\b/);
   return m ? { name: m[1].replace(/\s/g,''), known: false } : null;
 }
 function findQty(text){
   const t = String(text);
-  let m = t.match(/수\s*량\s*[:：;.]?\s*(\d{1,4})\b/) || t.match(/\b(\d{1,4})\s*(?:EA|Ea|ea|개|PCS|pcs)\b/);
+  // ① '수량 : 2' / '수 량 | 2' / '발주수량 4ea'
+  let m = t.match(/수\s*량\s*[:：;.|\]]*\s*([0-9]{1,4})\s*(?:EA|ea|개)?\b/);
   if (m) return String(+m[1]);
-  m = t.match(/(?:^|\s)([0-9Il|]{1,3})\s*E\s*A\b/);
-  return m ? String(+m[1].replace(/[Il|]/g,'1')) || '' : '';
+  // ② 숫자 바로 뒤 EA (OCR이 잘못 읽는 글자 보정: z→2, ㅣ·|·l·I·[→1, O→0, S→5)
+  const fix = d => d.replace(/[zZ]/g,'2').replace(/[ㅣ|lI\[\]!]/g,'1').replace(/[oO]/g,'0').replace(/[sS]/g,'5');
+  const ms = [...t.matchAll(/(?:^|[\s:|(\[])([0-9zZㅣ|lI!oO]{1,4})[ \t]{0,40}(?:EA|Ea|ea|eA|개|PCS|pcs|SET|set)\b/g)];   // 같은 줄에서 멀리 떨어져 있어도
+  for (const x of ms) { const v = fix(x[1]); if (/^\d+$/.test(v) && +v > 0) return String(+v); }
+  return '';
 }
 function findVendor(text){
   const T = normV(text); if (!T) return null;
@@ -527,7 +691,7 @@ function findVendor(text){
   const take = (v, s) => { if (!best || s > best.s || (s === best.s && v.n.length > best.n.length)) best = { ...v, s }; };
   for (const v of IX.ven) {
     if (v.n.length >= 3 && T.includes(v.n)) { take(v, 1); continue; }
-    if (v.n.length >= 4) {   // 한두 글자 잘못 읽힌 경우
+    if (v.n.length >= 4 && /[가-힣]/.test(v.n)) {   // 한두 글자 잘못 읽힌 경우 (한글 이름만. 영문 이름은 우연히 비슷한 글자가 많아 정확히 같을 때만)
       const md = v.n.length >= 6 ? 2 : 1;
       for (let i=0;i+v.n.length-1<=T.length;i++) {
         const d = lev(v.n, T.substr(i, v.n.length), md);
@@ -559,23 +723,28 @@ function analyze(text, conf){
   return r;
 }
 
-/* ================== 사진 인식 순서: QR → 글자(OCR) → 도면 표제란 확대 ================== */
+/* ================== 사진 인식 순서 ==================
+   1) QR/바코드 → 품번, 그리고 QR 위치·기울기로 라벨만 잘라 똑바로 편 뒤 글자 읽기
+   2) QR이 없으면 → 네 방향으로 빠르게 읽어 방향을 찾고, 글자가 모인 곳만 잘라 크게 다시 읽기
+   3) 그래도 품번이 없으면(도면 등) → 오른쪽 아래 표제란 확대, 흐림 보정 */
 async function recognize(file){
   const img = await loadImg(file);
   $('#thumb').src = img.src;
   const out = { pn:null, cands:[], proj:null, qty:'', ven:null, drawing:false, via:'' };
   // 1) QR/바코드
   step('QR 읽는 중…', 5);
-  let rot = null;
+  let rot = null, anchor = null;
   try {
     const codes = await readCodes(img);
     for (const c of codes) {
       const hit = codePart(c.text);
-      if (hit) { out.pn = { pn:hit.pn, name:hit.name, known:true }; rot = rotFromCode(c); break; }
+      if (hit) { out.pn = { pn:hit.pn, name:hit.name, known:true }; anchor = c; break; }
     }
-    if (!out.pn) { const c = codes.find(c => /^[A-Z0-9]{2,}(-[A-Z0-9]+){1,4}$/i.test(clean(c.text)) && /\d/.test(c.text));
-      if (c) { out.pn = { pn:clean(c.text).toUpperCase(), name:'', known:false }; rot = rotFromCode(c); } }
-    if (rot == null && codes[0]) rot = rotFromCode(codes[0]);
+    if (!out.pn) { const c = codes.find(c => /^[A-Z0-9]{2,}(-[A-Z0-9_]+){1,4}$/i.test(clean(c.text)) && /\d/.test(c.text) && !/^PUR|^PDI/i.test(c.text));
+      if (c) { out.pn = { pn:clean(c.text).toUpperCase(), name:'', known:false }; anchor = c; } }
+    anchor ||= codes.filter(c => c.geo).sort((a,b) => b.geo.side - a.geo.side)[0] || null;
+    if (anchor && !anchor.geo) anchor = null;
+    if (anchor) rot = rotFromCode(anchor);
     if (out.pn) out.via = 'QR';
     out.codes = codes.map(c => c.text);
   } catch(e) { console.warn('QR', e); }
@@ -583,25 +752,76 @@ async function recognize(file){
   step('글자 인식 준비 중… (처음 한 번만 오래 걸려요)', 15);
   const w = await ocrWorker();
   const passes = [];
-  const run = async (label, opt, pct) => {
-    step(label, pct);
-    const psm = opt.psm || '6';
+  const read = async (cv, psm, blocks) => {
     if (w._psm !== psm) { await w.setParameters({ tessedit_pageseg_mode: psm }); w._psm = psm; }
-    const { data } = await w.recognize(prep(img, opt));
-    const r = analyze(data.text, data.confidence); r.opt = opt; passes.push(r); return r;
+    const t0 = performance.now(), d = (await w.recognize(cv, {}, blocks ? { blocks:true } : {})).data;
+    d._ms = Math.round(performance.now() - t0); d._wh = cv.width + 'x' + cv.height; return d;
   };
+  const keep = (data, opt) => { const r = analyze(data.text, data.confidence); r.opt = { ...opt, ms:data._ms, wh:data._wh }; passes.push(r); return r; };
+  const run = async (label, opt, pct) => { step(label, pct); return keep(await read(prep(img, opt), opt.psm || '6'), opt); };
   const gotPart = () => out.pn || passes.some(p => p.parts[0]?.exact);
   const any = () => gotPart() || passes.some(p => p.parts.length || p.proj || p.ven || p.raw);
-  const r0 = rot ?? 0;
-  const p1 = await run('글자 읽는 중…', { rot:r0, ...PASS.main }, 30);
-  if (!p1.drawing) await run('한 번 더 확인 중…', { rot:r0, ...PASS.check }, 50);      // 라벨: 두 번 읽어서 서로 맞춰 봄
-  if (!gotPart()) await run('표제란 확대해서 읽는 중…', { rot:r0, crop: cropFor(r0, PASS.titleBlock), ...PASS.zoom }, 65);
-  if (!gotPart()) await run('흐림 보정해서 다시 읽는 중…', { rot:r0, ...PASS.moire }, 78);
-  // 아무것도 못 읽었고 QR로 방향을 몰랐다면: 사진이 돌아가 있을 수 있으니 다른 방향으로
-  if (rot == null && !any()) for (const [i, rr] of [90, 270, 180].entries()) {
-    await run(`다른 방향으로 읽는 중… (${i+1}/3)`, { rot:rr, ...PASS.main }, 84 + i*5);
-    if (any()) { if (!gotPart()) await run('표제란 확대해서 읽는 중…', { rot:rr, crop: cropFor(rr, PASS.titleBlock), ...PASS.zoom }, 98); break; }
+  let r0 = rot ?? 0;
+  const big = Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height) > PASS.bigPhoto;
+  if (!big) {
+    // 작은 사진(화면 캡처 등): 사진 전체를 2배로 키워 두 가지 방식으로 읽기, 아무것도 없으면 다른 방향
+    await run('글자 읽는 중…', { rot:r0, ...PASS.main }, 30);
+    if (!passes.at(-1).drawing) await run('한 번 더 확인 중…', { rot:r0, ...PASS.check }, 50);
+    if (rot == null && !any()) for (const [i, rr] of [90, 270, 180].entries()) {
+      await run(`다른 방향으로 읽는 중… (${i+1}/3)`, { rot:rr, ...PASS.main }, 55 + i*5);
+      if (any()) { r0 = rr; break; }
+    }
+  } else if (anchor) {
+    // QR 둘레 라벨만 잘라 읽기 (두 가지 방식으로 읽어 서로 비교)
+    step('라벨 읽는 중…', 30);
+    const cv = labelFromCode(img, anchor.geo);
+    keep(await read(cv, '6'), { label:'qr', psm:'6' });
+    step('한 번 더 확인 중…', 50);
+    keep(await read(cv, '11'), { label:'qr', psm:'11' });
+  } else {
+    // 방향 찾기: 네 방향을 빠르게 읽어 '읽히는 글자'가 가장 많은 방향
+    let best = null;
+    for (const [i, rr] of [0, 270, 90, 180].entries()) {
+      step(`방향 확인 중… (${i+1}/4)`, 20 + i*6);
+      const cv = prep(img, { rot:rr, ...PASS.orient });
+      const data = await read(cv, PASS.orient.psm, true);
+      const words = (data.blocks||[]).flatMap(b => b.paragraphs).flatMap(p => p.lines).flatMap(l => l.words);
+      const good = words.filter(x => x.confidence > 70 && /^([A-Za-z]{3,}|[가-힣]{2,}|[A-Z0-9]+-[A-Z0-9-]+|\d{3,})$/.test(x.text));
+      const a = analyze(data.text, data.confidence);
+      const sc = good.length*3 + data.confidence/10 + (/(PUR|20[0-9]{2})[0-9]{4,}/.test(data.text.replace(/\s/g,'')) ? 6 : 0) + (a.parts[0]?.exact ? 6 : 0) + (a.proj?.known ? 3 : 0) + (a.drawing ? 6 : 0);
+      if (!best || sc > best.sc) best = { sc, rr, cv, words: good.length >= 3 ? good : words.filter(x => x.confidence > 50 && x.text.length >= 2), a, data };
+      if (good.length >= 8 && data.confidence >= 65) break;   // 이 방향이 확실하면 나머지는 건너뜀
+    }
+    r0 = best.rr; best.a.opt = { label:'orient', rot:r0 }; passes.push(best.a);
+    // 글자가 모인 곳만 원본 해상도로 잘라 크게 다시 읽기
+    const ws = best.words;
+    if (ws.length >= 2) {
+      const ang = -r0 * Math.PI / 180, co = Math.cos(ang), si = Math.sin(ang);
+      const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height, cx = W/2, cy = H/2;
+      const pts = ws.flatMap(x => [[x.bbox.x0, x.bbox.y0], [x.bbox.x1, x.bbox.y1]]).map(([u,v]) => best.cv._map(u, v))
+        .map(([X,Y]) => [(X-cx)*co + (Y-cy)*si, -(X-cx)*si + (Y-cy)*co]);
+      const xs = pts.map(p => p[0]).sort((a,b) => a-b), ys = pts.map(p => p[1]).sort((a,b) => a-b);
+      const q = (arr, f) => arr[Math.min(arr.length-1, Math.max(0, Math.round(f*(arr.length-1))))];
+      let x0 = q(xs,0.02), x1 = q(xs,0.98), y0 = q(ys,0.02), y1 = q(ys,0.98);
+      const mx = (x1-x0)*0.12 + 20, my = (y1-y0)*0.12 + 20; x0 -= mx; x1 += mx; y0 -= my; y1 += my;
+      const hs = ws.map(x => x.bbox.y1 - x.bbox.y0).sort((a,b) => a-b), hmed = hs[hs.length >> 1] / best.cv._s;
+      let k = Math.min(2.5, PASS.wordPx / Math.max(4, hmed));
+      k = Math.min(k, 2600 / Math.max(x1-x0, y1-y0));
+      const wide = (x1-x0) * (y1-y0) > 0.6 * W * H;   // 글자가 사진 전체에 퍼져 있으면(도면 등) 자르지 않음
+      if (!wide) {
+        const cv = cropRot(img, { cx, cy, ang, x0, x1, y0, y1, k, bin:PASS.inkRatio });
+        step('글자 부분 확대해서 읽는 중…', 50);
+        keep(await read(cv, '6'), { label:'words', psm:'6' });
+        step('한 번 더 확인 중…', 60);
+        keep(await read(cv, '11'), { label:'words', psm:'11' });
+      } else {
+        await run('글자 읽는 중…', { rot:r0, ...PASS.main }, 50);
+        if (!passes.at(-1).drawing) await run('한 번 더 확인 중…', { rot:r0, ...PASS.check }, 60);
+      }
+    }
   }
+  if (!gotPart()) await run('표제란 확대해서 읽는 중…', { rot:r0, crop: cropFor(r0, PASS.titleBlock), ...PASS.zoom }, 70);
+  if (!gotPart()) await run('흐림 보정해서 다시 읽는 중…', { rot:r0, ...PASS.moire }, 82);
   // 결과 합치기
   const vote = (vals, keyf = x => x) => { const m = new Map();
     vals.filter(Boolean).forEach((v, i) => { const k = keyf(v); const o = m.get(k) || { v, n:0, i }; o.n++; m.set(k, o); });
@@ -617,7 +837,7 @@ async function recognize(file){
     else {
       out.cands = list.slice(0, 3);
       // 목록에서 확실한 걸 못 찾았으면 읽은 글자를 그대로 넣고 '확인 필요' 표시 (목록에 없는 외주 부품 등)
-      const raw = vote(passes.map(p => p.raw))[0]?.v;
+      const raw = vote(passes.filter(p => p.opt.label !== 'orient').map(p => p.raw))[0]?.v;
       if (raw) { out.pn = { pn:raw, name:'', known:false, check:true }; out.via = '글자'; out.cands = list.filter(c => c.pn !== raw).slice(0, 3); }
     }
   }

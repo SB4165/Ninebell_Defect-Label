@@ -85,6 +85,18 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .pick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pick .btn{padding:12px 10px;font-size:15px}
 .shot{display:none;margin-top:12px;gap:12px;align-items:flex-start}
+/* 화면 안 카메라 (카메라 앱으로 넘어가지 않음 → 갤럭시에서 페이지가 새로 열리며 사진이 사라지는 문제 방지) */
+.cam{position:fixed;inset:0;z-index:70;background:#000;display:flex;flex-direction:column}
+.cam[hidden],.cam .cmsg[hidden]{display:none}
+.cam video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+.cam .ctop{position:absolute;top:0;left:0;right:0;padding:max(12px,env(safe-area-inset-top)) 16px 12px;color:#fff;font-size:13px;text-align:center;background:linear-gradient(rgba(0,0,0,.55),transparent);pointer-events:none}
+.cam .cbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px max(18px,env(safe-area-inset-bottom));background:#000}
+.cam .cbtn{font:inherit;font-size:15px;color:#fff;background:none;border:0;padding:10px 6px;min-width:64px;cursor:pointer}
+.cam .cbtn.on{color:#ffd33d;font-weight:700}
+.cam .shut{width:72px;height:72px;border-radius:50%;border:4px solid #fff;background:#fff;box-shadow:inset 0 0 0 4px #000;cursor:pointer;padding:0}
+.cam .shut:active{transform:scale(.94)}
+.cam .shut[disabled]{opacity:.5}
+.cam .cmsg{position:absolute;left:16px;right:16px;top:45%;color:#fff;text-align:center;font-size:14px}
 .shot img{width:96px;height:96px;object-fit:cover;border:1px solid var(--bd);border-radius:6px;background:var(--bg2);flex:none}
 .prog{flex:1;min-width:0}
 .prog .t{font-size:13px;font-weight:600}
@@ -221,6 +233,16 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
     </div>
   </section>
 </main>
+<div class="cam" id="cam" hidden>
+  <video id="camV" playsinline muted autoplay></video>
+  <div class="ctop">라벨(QR 포함)이 화면에 크게 들어오게 찍어 주세요</div>
+  <div class="cmsg" id="camMsg">카메라 켜는 중…</div>
+  <div class="cbar">
+    <button class="cbtn" id="camX" type="button">취소</button>
+    <button class="shut" id="camShot" type="button" aria-label="찍기" disabled></button>
+    <button class="cbtn" id="camTorch" type="button" style="visibility:hidden">플래시</button>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -282,7 +304,7 @@ const key = s => clean(s).toUpperCase().replace(/\s+/g,'');
 const ko = (a,b) => String(a).localeCompare(String(b),'ko');
 const store = { get(k,d){ try{ const v=localStorage.getItem(k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
                 set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
-function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'),1400); }
+function toast(m, ms = 1400){ const t=$('#toast'); t.textContent=m; t.classList.add('on'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('on'), ms); }
 const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
 const choseong = s => [...String(s)].map(ch => { const c=ch.charCodeAt(0)-0xAC00; return (c>=0&&c<11172)? CHO[Math.floor(c/588)] : ch; }).join('');
 const JAMO2 = {'ㄳ':'ㄱㅅ','ㄵ':'ㄴㅈ','ㄶ':'ㄴㅎ','ㄺ':'ㄹㄱ','ㄻ':'ㄹㅁ','ㄼ':'ㄹㅂ','ㄽ':'ㄹㅅ','ㄾ':'ㄹㅌ','ㄿ':'ㄹㅍ','ㅀ':'ㄹㅎ','ㅄ':'ㅂㅅ'};
@@ -1163,10 +1185,80 @@ async function onFile(file){
     $('#bCam').disabled = $('#bAlb').disabled = false; onOcrProg = null;
   }
 }
-for (const [b, f] of [['#bCam','#fCam'],['#bAlb','#fAlb']]) {
-  $(b).addEventListener('click', () => { $(f).value = ''; $(f).click(); for (let i=0;i<PAR;i++) ocrWorker(i).catch(()=>{}); zx().catch(()=>{}); });   // 고르는 동안 도구를 미리 받기 시작
-  $(f).addEventListener('change', e => onFile(e.target.files[0]));
+/* ================== 사진 찍기: 화면 안 카메라 ==================
+ * 휴대폰 카메라 앱으로 넘어가면, 메모리가 적은 폰(갤럭시 등)은 그 사이 브라우저 페이지를 정리해 버려서
+ * 찍고 돌아왔을 때 페이지가 새로 열리고 사진이 사라짐 → 이 화면 안에서 카메라를 켜서 찍음.
+ * 카메라를 못 켜면(권한 거부·미지원) 예전처럼 카메라 앱으로. */
+const CAM = { stream:null, track:null, torch:false };
+const warmTools = () => { for (let i=0;i<PAR;i++) ocrWorker(i).catch(()=>{}); zx().catch(()=>{}); };
+async function openCam(){
+  if (!navigator.mediaDevices?.getUserMedia) return externalCam();
+  const box = $('#cam'), msg = $('#camMsg'), shot = $('#camShot');
+  box.hidden = false; msg.textContent = '카메라 켜는 중…'; msg.hidden = false; shot.disabled = true; $('#camTorch').style.visibility = 'hidden';
+  history.pushState({ cam:1 }, '');   // 휴대폰 '뒤로' 버튼으로 닫기
+  try {
+    CAM.stream = await navigator.mediaDevices.getUserMedia({ audio:false,
+      video: { facingMode:{ ideal:'environment' }, width:{ ideal:4096 }, height:{ ideal:3072 } } });
+  } catch(e) {
+    closeCam(true);
+    toast(e.name === 'NotAllowedError' ? '카메라 권한이 없어 휴대폰 카메라로 찍어요' : '카메라를 켜지 못해 휴대폰 카메라로 찍어요', 3000);
+    return externalCam();
+  }
+  if (box.hidden) { stopStream(); return; }   // 켜지는 사이에 닫음
+  CAM.track = CAM.stream.getVideoTracks()[0];
+  try { await CAM.track.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); } catch(e) {}
+  const cap = CAM.track.getCapabilities ? CAM.track.getCapabilities() : {};
+  if (cap.torch) $('#camTorch').style.visibility = 'visible';
+  const v = $('#camV'); v.srcObject = CAM.stream;
+  try { await v.play(); } catch(e) {}
+  msg.hidden = true; shot.disabled = false;
+  warmTools();
 }
+function stopStream(){ if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = CAM.track = null; CAM.torch = false; $('#camTorch').classList.remove('on'); $('#camV').srcObject = null; }
+function closeCam(fromPop){
+  stopStream(); $('#cam').hidden = true;
+  if (!fromPop && history.state && history.state.cam) history.back();
+}
+addEventListener('popstate', () => { if (!$('#cam').hidden) closeCam(true); });
+// 찍기: 가능하면 카메라 최대 해상도 사진(takePhoto), 안 되면 화면 영상에서 한 장
+async function grabPhoto(){
+  const v = $('#camV');
+  if (window.ImageCapture && CAM.track) {
+    try {
+      const ic = new ImageCapture(CAM.track);
+      const blob = await Promise.race([ic.takePhoto(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))]);
+      if (blob && blob.size > 50000) return blob;
+    } catch(e) {}
+  }
+  const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+}
+$('#camShot').addEventListener('click', async () => {
+  const shot = $('#camShot'); if (shot.disabled) return; shot.disabled = true;
+  try {
+    const blob = await grabPhoto();
+    closeCam();
+    if (blob) onFile(new File([blob], 'camera.jpg', { type: blob.type || 'image/jpeg' }));
+  } catch(e) { shot.disabled = false; toast('사진을 찍지 못했어요. 다시 눌러 주세요'); }
+});
+$('#camX').addEventListener('click', () => closeCam());
+$('#camTorch').addEventListener('click', async () => {
+  if (!CAM.track) return; CAM.torch = !CAM.torch;
+  try { await CAM.track.applyConstraints({ advanced:[{ torch: CAM.torch }] }); $('#camTorch').classList.toggle('on', CAM.torch); } catch(e) { CAM.torch = !CAM.torch; }
+});
+// 예전 방식(휴대폰 카메라 앱): 넘어가기 전에 글자 인식기를 꺼서 메모리를 비움 → 페이지가 정리될 가능성을 줄임
+function externalCam(){
+  for (let i=0;i<workerP.length;i++) { const p = workerP[i]; workerP[i] = null; p && p.then(w => w.terminate()).catch(()=>{}); }
+  try { sessionStorage.setItem('dl_pick', Date.now()); } catch(e) {}
+  $('#fCam').value = ''; $('#fCam').click();
+}
+$('#bCam').addEventListener('click', openCam);
+$('#bAlb').addEventListener('click', () => { try { sessionStorage.setItem('dl_pick', Date.now()); } catch(e) {} $('#fAlb').value = ''; $('#fAlb').click(); warmTools(); });   // 고르는 동안 도구를 미리 받기 시작
+for (const f of ['#fCam', '#fAlb']) $(f).addEventListener('change', e => { try { sessionStorage.removeItem('dl_pick'); } catch(_) {} onFile(e.target.files[0]); });
+// 사진을 고르러 나간 사이 페이지가 새로 열렸으면(휴대폰 메모리 부족) 알려 줌
+try { const t = +sessionStorage.getItem('dl_pick'); sessionStorage.removeItem('dl_pick');
+  if (t && Date.now() - t < 10*60*1000) setTimeout(() => toast('사진을 받지 못했어요 (휴대폰 메모리 부족). 다시 시도해 주세요', 5000), 800); } catch(e) {}
 $('#bNew').addEventListener('click', () => { Object.keys(F).filter(k => k !== 'req').forEach(k => setField(k, '')); Object.assign(ctx, { pur:'', a:{}, sent:'' }); showCands([]); showProjAlt([]); $('#shot').style.display = 'none'; refresh(); F.proj.focus(); });
 
 /* 검색 드롭다운 (초성 검색 지원) */

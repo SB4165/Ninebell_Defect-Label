@@ -28,6 +28,35 @@ body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,B
 .inst button{font:inherit;border:1px solid var(--bd);background:var(--bg);border-radius:6px;padding:3px 10px;cursor:pointer}
 .inst button.go{background:var(--btn);border-color:var(--btn);color:#fff;font-weight:600}
 header{background:var(--bg2);border-bottom:1px solid var(--bd);padding:12px 16px}
+/* 탭 (품질팀 변환기와 같은 모양) */
+.tabs{max-width:680px;margin:0 auto;padding:12px 16px 0;display:flex;gap:4px;border-bottom:1px solid var(--bd)}
+.tabs button{font:inherit;font-size:14px;font-weight:600;background:none;border:1px solid transparent;border-bottom:0;border-radius:6px 6px 0 0;padding:8px 14px;color:var(--mut);cursor:pointer;margin-bottom:-1px}
+.tabs button.on{background:var(--bg);border-color:var(--bd);color:var(--fg)}
+.tabs .badge{display:inline-block;min-width:18px;padding:0 6px;margin-left:4px;border-radius:2em;background:var(--acc-bg);color:var(--acc);font-size:11px}
+/* 개선요청 */
+.rqform{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px 10px;align-items:start}
+.rqform label{font-size:12px;color:var(--mut);font-weight:600;padding-top:7px}
+.rqform textarea{min-height:80px}
+.rqi{border:1px solid var(--bd2);border-radius:6px;padding:10px 12px;margin-bottom:8px;background:var(--bg)}
+.rqi .h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mut)}
+.rqi .h b{color:var(--fg);font-size:13px}
+.rqi .h select{margin-left:auto}
+.rqi .t{white-space:pre-wrap;word-break:break-word;margin:6px 0 0}
+.rqi .op{white-space:pre-wrap;word-break:break-word;margin:8px 0 0;padding:6px 10px;background:var(--bg2);border-left:3px solid var(--acc);border-radius:0 6px 6px 0;font-size:13px}
+.rqi .op small{display:block;color:var(--mut);font-weight:600;margin-bottom:2px}
+.rqi .a{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+select.rst{width:auto;font:inherit;font-size:12px;font-weight:600;padding:3px 6px;border-radius:2em;border:1px solid var(--bd)}
+.rst.s0{background:var(--warn-bg);color:var(--warn);border-color:#e6d27a}
+.rst.s1{background:var(--acc-bg);color:var(--acc);border-color:#9cc7f5}
+.rst.s2{background:var(--ok-bg);color:var(--ok);border-color:#9bd2ab}
+.rst.s3{background:#f9cdc6;color:#1f2328;border-color:#e8a99f}
+.modal{position:fixed;inset:0;background:rgba(31,35,40,.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:16px}
+.modal .mbox{background:var(--bg);border:1px solid var(--bd);border-radius:10px;box-shadow:0 12px 32px rgba(31,35,40,.25);width:100%;max-width:440px;padding:18px;max-height:90vh;overflow:auto}
+.modal h3{margin:0 0 8px;font-size:16px}
+.modal p{margin:0 0 12px;color:var(--mut)}
+.modal .mf{margin-bottom:10px} .modal .mf label{display:block;font-size:12px;color:var(--mut);font-weight:600;margin-bottom:3px}
+.modal .mbtn{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.modal .mbtn .btn{min-width:80px;padding:7px 16px}
 .hwrap{max-width:680px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .logo{font-weight:600;font-size:16px;display:flex;align-items:center;gap:8px}
 .logo .wm{height:18px;width:auto;display:block}
@@ -98,7 +127,11 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 </div>
 <div class="inst" id="inst"><span class="sp" id="instT"></span><button class="go" type="button" id="instGo" hidden>설치</button><button type="button" id="instX" aria-label="닫기">닫기</button></div>
 </header>
-<main>
+<nav class="tabs" id="tabs">
+  <button type="button" class="on" data-tab="main">부적합 처리 요청</button>
+  <button type="button" data-tab="req">개선요청<span class="badge" id="reqBadge" style="display:none"></span></button>
+</nav>
+<main id="pMain">
   <section class="box">
     <div class="box-h"><h2>라벨·도면 사진</h2><span class="mut">사진을 올리면 아래 칸이 자동으로 채워져요</span></div>
     <div class="box-b">
@@ -167,6 +200,27 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
     </div>
   </section>
 </main>
+<main id="pReq" hidden>
+  <section class="box">
+    <div class="box-h"><h2>개선요청</h2><span class="mut">사이트를 쓰면서 불편한 점·바라는 기능을 남겨 주세요</span></div>
+    <div class="box-b">
+      <div class="rqform">
+        <label for="rqAuthor">작성자</label>
+        <div class="combo"><input id="rqAuthor" autocomplete="off" placeholder="입력 필요 · 초성 검색 (예: ㄱㄷㅎ)"><div class="dd" id="dRqa"></div></div>
+        <label for="rqText">요청사항</label>
+        <textarea id="rqText" placeholder="입력 필요 (예: 사진 찍고 나서 수량도 자동으로 들어가면 좋겠어요)"></textarea>
+        <span></span><div><button class="btn pri" id="rqAdd" type="button">등록</button></div>
+      </div>
+    </div>
+  </section>
+  <section class="box">
+    <div class="box-h"><h2>요청 목록</h2><span class="mut" id="rqInfo">불러오는 중…</span><button class="btn sm" id="rqRefresh" type="button" style="margin-left:auto">새로고침</button></div>
+    <div class="box-b">
+      <div id="rqList"></div>
+      <p class="mut" style="margin:8px 0 0;font-size:12px">· 요청 등록·수정·삭제는 누구나 · 검토사항과 의견은 관리자만 (비밀번호) · 15초마다 자동 새로고침</p>
+    </div>
+  </section>
+</main>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -178,10 +232,12 @@ const CONFIG = {
   PROJ:  { names: y=>[`참조(${y})`,`참조 (${y})`], gid: '664632288', range: 'L1:M5000', merge: true },  // 프로젝트 발주명, 올해+작년 합침
   PARTS: { gid: '1577658176', range: 'A:L' },   // 품명/품번 시트: 품번·품명·발견자(요청자). 행 수 제한 없이 끝까지 읽음 (2026-10 기준 약 7.8만 행)
   // 라벨에 적힌 업체 이름 → 시트(귀책 목록)에 있는 이름. 왼쪽은 (주)·㈜·주식회사·공백·점을 뺀 글자로 적기
-  ASK_VENDOR: '확인요청',
-  // 학습 기록: 사람이 확인한 값(발주번호·품번 → 프로젝트·귀책)을 모든 휴대폰이 같이 씀.
-  // 학습기록_AppsScript.gs 를 웹 앱으로 배포한 뒤 그 주소(…/exec)를 넣기. 비워 두면 꺼짐
-  LEARN_URL: '',   // 귀책을 모를 때 [확인요청] 버튼을 누르면 귀책 칸에 들어가는 글자
+  ASK_VENDOR: '확인요청',   // 귀책을 모를 때 [확인요청] 버튼을 누르면 귀책 칸에 들어가는 글자
+  // 서버 주소: 학습기록_AppsScript.gs 를 웹 앱으로 배포한 뒤 그 주소(…/exec)를 넣기.
+  //   - 학습 기록: 사람이 확인한 값(발주번호·품번 → 프로젝트·귀책)을 모든 휴대폰이 같이 씀
+  //   - 개선요청 탭: 요청 목록 저장 (제조팀 전용, 품질팀 변환기와 따로)
+  //   비워 두면 두 기능 모두 꺼짐
+  SERVER_URL: 'https://script.google.com/macros/s/AKfycbwEUJgtuePCy6R-n8w5Dr9UHD606NkefAEr64lDdC6A4yOx5ZPDUNjpU0rPQUcMhWXI/exec',
   VENDOR_ALIAS: {
     '브이피시스템': 'VP시스템',
     '한국메카트로닉스': '한국메카',
@@ -350,7 +406,19 @@ function parseFinders(rows){
 }
 
 /* ================== 상태 / 데이터 불러오기 ================== */
-const S = { parts:new Map(), proj:[], vendors:[], finders:[], ld:{} };
+const S = { parts:new Map(), proj:[], vendors:[], finders:[], mgrs:[], ld:{} };
+// 제조담당자 명단 (품명/품번 시트 G열 '제조담당자') → 개선요청 작성자
+function parseMgrs(rows){
+  let ci = -1, start = 0;
+  for (let i = 0; i < Math.min(rows.length, 30) && ci < 0; i++) {
+    const j = rows[i].findIndex(x => clean(x).replace(/\s/g,'') === '제조담당자');
+    if (j >= 0) { ci = j; start = i + 1; }
+  }
+  if (ci < 0) { ci = 6; start = 1; }
+  const seen = new Set(), out = [];
+  for (const r of rows.slice(start)) { const n = clean(r[ci]); if (n && n.replace(/\s/g,'') !== '제조담당자' && !seen.has(n)) { seen.add(n); out.push(n); } }
+  return out.sort(ko);
+}
 const IX = { pn:new Map(), tri:new Map(), list:[], proj:[], ven:[], projBase:new Map() };
 function buildIndex(){
   IX.list = [...S.parts.values()].map(p => ({ p, n:normC(p.pn), nm:normN(p.name) }));
@@ -383,17 +451,17 @@ function setStatus(){
 }
 async function loadAll(){
   const cache = store.get('dl_cache', null);
-  if (cache) { S.proj = cache.proj || []; S.vendors = cache.vendors || []; S.finders = cache.finders || []; buildIndex(); }
+  if (cache) { S.proj = cache.proj || []; S.vendors = cache.vendors || []; S.finders = cache.finders || []; S.mgrs = cache.mgrs || []; buildIndex(); }
   setStatus();
   const jobs = [
-    loadSheet(CONFIG.PARTS, r=>({ parts:parseParts(r), finders:parseFinders(r) }), x=>x.parts.size>0).then(([x])=>{ S.parts=x.parts; S.finders=x.finders; S.ld.parts=true; }).catch(()=>S.ld.parts=false),
+    loadSheet(CONFIG.PARTS, r=>({ parts:parseParts(r), finders:parseFinders(r), mgrs:parseMgrs(r) }), x=>x.parts.size>0).then(([x])=>{ S.parts=x.parts; S.finders=x.finders; S.mgrs=x.mgrs; S.ld.parts=true; }).catch(()=>S.ld.parts=false),
     loadSheet(CONFIG.PROJ, parseProj, x=>x.length>0).then(list=>{ const m=new Map(); list.flat().forEach(p=>{ if(!m.has(p.k)) m.set(p.k,p); }); S.proj=[...m.values()]; S.ld.proj=true; }).catch(()=>S.ld.proj=false),
     loadSheet(CONFIG.REF, parseVendors, x=>x.length>0).then(([x])=>{ S.vendors=x; S.ld.ven=true; }).catch(()=>S.ld.ven=false),
   ];
   for (const j of jobs) j.then(setStatus);
   await Promise.all(jobs);
   buildIndex(); setStatus();
-  if (S.ld.parts || S.ld.proj || S.ld.ven) store.set('dl_cache', { proj:S.proj, vendors:S.vendors, finders:S.finders });   // 품번은 너무 많아서 저장하지 않음
+  if (S.ld.parts || S.ld.proj || S.ld.ven) store.set('dl_cache', { proj:S.proj, vendors:S.vendors, finders:S.finders, mgrs:S.mgrs });   // 품번은 너무 많아서 저장하지 않음
 }
 
 /* ================== 학습 기록 (사람이 확인한 값을 모든 휴대폰이 같이 씀) ================== */
@@ -401,13 +469,13 @@ async function loadAll(){
 //       품번 → 프로젝트·귀책 (참고용: 빈 칸이나 '확인 필요' 칸만 채움)
 // 값 모양: { p:[프로젝트, 확인 횟수], v:[귀책, 확인 횟수] }
 const LEARN = { pur:{}, pn:{}, ok:null };
-const learnOn = () => !!CONFIG.LEARN_URL;
+const learnOn = () => !!CONFIG.SERVER_URL;
 async function loadLearn(){
   if (!learnOn()) return;
   const c = store.get('dl_learn', null); if (c) { LEARN.pur = c.pur || {}; LEARN.pn = c.pn || {}; }
   setStatus();
   try {
-    const j = await (await fetch(CONFIG.LEARN_URL, { cache:'no-store' })).json();
+    const j = await (await fetch(CONFIG.SERVER_URL, { cache:'no-store' })).json();
     if (j.ok) { LEARN.pur = j.pur || {}; LEARN.pn = j.pn || {}; LEARN.ok = true;
       for (const r of store.get('dl_learnq', [])) learnLocal(r);   // 아직 못 보낸 기록도 반영
       store.set('dl_learn', { pur:LEARN.pur, pn:LEARN.pn }); }
@@ -425,7 +493,7 @@ async function flushLearn(){   // 못 보낸 기록을 보냄 (인터넷이 끊�
   const q = store.get('dl_learnq', []); if (!q.length) return;
   flushLearn.busy = true;
   try {
-    const j = await (await fetch(CONFIG.LEARN_URL, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify({ recs:q }) })).json();
+    const j = await (await fetch(CONFIG.SERVER_URL, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify({ recs:q }) })).json();
     if (j.ok) store.set('dl_learnq', store.get('dl_learnq', []).slice(q.length));
   } catch(e) {} finally { flushLearn.busy = false; }
 }
@@ -1182,6 +1250,142 @@ refresh();
 loadAll().then(() => { srcProj = srcPn = srcVen = null; refresh(); });
 loadLearn();
 addEventListener('online', flushLearn);
+
+/* ================== 탭 ================== */
+let reqTimer = null;
+function showTab(t){
+  document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  $('#pMain').hidden = t !== 'main'; $('#pReq').hidden = t !== 'req';
+  clearInterval(reqTimer); reqTimer = null;
+  if (t === 'req') { renderReqForm(); loadReq(); reqTimer = setInterval(() => { if (!document.hidden && !document.querySelector('.modal')) loadReq(true); }, 15000); }
+  try { sessionStorage.setItem('dl_tab', t); } catch(e) {}
+  scrollTo(0, 0);
+}
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
+
+/* ================== 작은 창 (확인·입력) ================== */
+// fields: [{k, label, type:'text'|'textarea'|'password'|'select', value, options}] → 누른 버튼 값과 입력값
+function modal({ title, body = '', fields = [], buttons = [{ label:'확인', value:true, cls:'pri' }], focus }){
+  return new Promise(res => {
+    const m = document.createElement('div'); m.className = 'modal';
+    m.innerHTML = `<div class="mbox" role="dialog" aria-modal="true"><h3>${esc(title)}</h3>${body ? `<p>${body}</p>` : ''}
+      ${fields.map(f => `<div class="mf"><label>${esc(f.label)}</label>${
+        f.type === 'textarea' ? `<textarea data-k="${f.k}" rows="4">${esc(f.value || '')}</textarea>`
+        : f.type === 'select' ? `<select data-k="${f.k}" class="rst">${f.options.map(o => `<option${o === f.value ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+        : `<input data-k="${f.k}" type="${f.type || 'text'}" value="${esc(f.value || '')}" autocomplete="off">`}</div>`).join('')}
+      <div class="mbtn">${buttons.map((b, i) => `<button type="button" class="btn ${b.cls || ''}" data-b="${i}">${esc(b.label)}</button>`).join('')}</div></div>`;
+    const done = v => { const vals = {}; m.querySelectorAll('[data-k]').forEach(el => vals[el.dataset.k] = el.value); m.remove(); res({ v, vals }); };
+    m.addEventListener('click', e => { const b = e.target.closest('[data-b]'); if (b) done(buttons[+b.dataset.b].value); else if (e.target === m) done(false); });
+    m.addEventListener('keydown', e => { if (e.key === 'Escape') done(false); if (e.key === 'Enter' && e.target.tagName === 'INPUT') { const d = buttons.find(b => b.cls === 'pri'); if (d) done(d.value); } });
+    document.body.appendChild(m);
+    (m.querySelector(focus ? `[data-k="${focus}"]` : '[data-k]') || m.querySelector('.btn.pri'))?.focus();
+  });
+}
+
+/* ================== 개선요청 (서버: CONFIG.SERVER_URL) ================== */
+const REQ_STATUS = ['검토', '작업중', '적용완료', '적용불가'];
+S.rq = [];
+async function api(action, data = {}){
+  if (!CONFIG.SERVER_URL) throw new Error('서버 주소가 아직 설정되지 않았어요');
+  const r = action === 'reqList'
+    ? await fetch(CONFIG.SERVER_URL + '?action=reqList&t=' + Date.now(), { cache:'no-store' })
+    : await fetch(CONFIG.SERVER_URL, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' }, body: JSON.stringify({ action, ...data }) });
+  const j = await r.json();
+  if (!j.ok) { const e = new Error(j.error === 'badpw' ? '비밀번호가 맞지 않아요' : (j.error || '서버 오류')); e.code = j.error; throw e; }
+  return j;
+}
+// 관리자 비밀번호: 한 번 맞으면 이 창을 닫을 때까지 다시 묻지 않음
+async function adminPw(){
+  let pw = ''; try { pw = sessionStorage.getItem('dl_rqpw') || ''; } catch(e) {}
+  if (pw) return pw;
+  const r = await modal({ title:'관리자 비밀번호', body:'검토사항과 의견은 관리자만 바꿀 수 있어요.', fields:[{ k:'pw', label:'비밀번호', type:'password' }],
+    buttons:[{ label:'취소', value:false }, { label:'확인', value:true, cls:'pri' }] });
+  if (!r.v || !r.vals.pw) return '';
+  try { await api('auth', { pw:r.vals.pw }); } catch(e) { toast(e.message); return ''; }
+  try { sessionStorage.setItem('dl_rqpw', r.vals.pw); } catch(e) {}
+  return r.vals.pw;
+}
+async function review(x, data){
+  const pw = await adminPw(); if (!pw) return false;
+  try { await api('reqReview', { id:x.id, pw, ...data }); return true; }
+  catch(e) { if (e.code === 'badpw') try { sessionStorage.removeItem('dl_rqpw'); } catch(_) {} toast(e.message); return false; }
+}
+// 작성자: 제조담당자 명단에서 초성 검색. 처음엔 빈칸, 한 번 고르면 이 휴대폰에 저장
+const RQA = $('#rqAuthor'), RQT = $('#rqText');
+combo(RQA, $('#dRqa'), byName(() => S.mgrs.map(n => ({ v:n }))), () => { store.set('dl_rqa', clean(RQA.value)); renderReqForm(); }, '명단에 없음 — 그대로 입력돼요');
+RQA.addEventListener('change', () => store.set('dl_rqa', clean(RQA.value)));
+RQA.value = store.get('dl_rqa', '');
+function renderReqForm(){
+  RQA.classList.toggle('need', !clean(RQA.value)); RQT.classList.toggle('need', !clean(RQT.value));
+}
+RQA.addEventListener('input', renderReqForm); RQT.addEventListener('input', renderReqForm);
+let rqBusy = false, rqAgain = false;
+async function loadReq(quiet){
+  if (rqBusy) { rqAgain = true; return; } rqBusy = true;   // 불러오는 중에 또 부르면 끝난 뒤 한 번 더
+  if (!quiet && !S.rq.length) $('#rqInfo').textContent = '불러오는 중…';
+  try { const r = await api('reqList'); S.rq = (r.items || []).sort((a, b) => b.no - a.no); renderReq(); }
+  catch(e) { $('#rqInfo').textContent = '연결 안 됨: ' + e.message; if (!S.rq.length) $('#rqList').innerHTML = ''; }
+  finally { rqBusy = false; if (rqAgain) { rqAgain = false; loadReq(true); } }
+}
+const ymd = t => { if (!t) return ''; const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()}`; };
+function renderReq(){
+  const cnt = k => S.rq.filter(x => x.status === k).length;
+  $('#rqInfo').textContent = `${S.rq.length}건 · ` + REQ_STATUS.map(k => `${k} ${cnt(k)}`).join(' · ');
+  const b = $('#reqBadge'), n = cnt('검토') + cnt('작업중'); b.style.display = n ? '' : 'none'; b.textContent = n;
+  $('#rqList').innerHTML = !S.rq.length ? '<p class="mut" style="margin:8px 0;text-align:center">아직 등록된 요청이 없어요.</p>'
+    : S.rq.map(x => { const si = Math.max(0, REQ_STATUS.indexOf(x.status));
+      return `<div class="rqi" data-id="${esc(x.id)}">
+        <div class="h"><b>No.${x.no}</b><span>${esc(x.author)}</span><span>${ymd(x.created)}</span>
+          <select class="rst s${si}" data-rst aria-label="검토사항">${REQ_STATUS.map(k => `<option${k === x.status ? ' selected' : ''}>${k}</option>`).join('')}</select></div>
+        <div class="t">${esc(x.text)}</div>
+        ${x.opinion ? `<div class="op"><small>의견</small>${esc(x.opinion)}</div>` : ''}
+        <div class="a"><button class="btn sm" type="button" data-red>수정</button><button class="btn sm" type="button" data-rdel>삭제</button>
+          <button class="btn sm" type="button" data-rop style="margin-left:auto">의견 ${x.opinion ? '수정' : '작성'}</button></div></div>`; }).join('');
+}
+$('#rqRefresh').onclick = () => loadReq();
+$('#rqAdd').onclick = async () => {
+  const author = clean(RQA.value), text = RQT.value.trim();
+  if (!author || !text) { renderReqForm(); return toast(`${[!author && '작성자', !text && '요청사항'].filter(Boolean).join(', ')}을(를) 입력해 주세요`); }
+  const btn = $('#rqAdd'); btn.disabled = true;
+  try { await api('reqAdd', { author, text }); store.set('dl_rqa', author); RQT.value = ''; renderReqForm(); toast('개선요청을 등록했어요'); loadReq(); }
+  catch(e) { toast('등록하지 못했어요: ' + e.message); }
+  finally { btn.disabled = false; }
+};
+$('#rqList').addEventListener('change', async e => {
+  const sel = e.target.closest('[data-rst]'); if (!sel) return;
+  const x = S.rq.find(y => y.id === sel.closest('[data-id]').dataset.id); if (!x) return;
+  const v = sel.value;
+  if (await review(x, { status:v })) { x.status = v; renderReq(); toast(`검토사항을 '${v}'(으)로 바꿨어요`); loadReq(true); }
+  else { sel.value = x.status; }
+});
+$('#rqList').addEventListener('click', async e => {
+  const card = e.target.closest('[data-id]'); if (!card) return;
+  const x = S.rq.find(y => y.id === card.dataset.id); if (!x) return;
+  try {
+    if (e.target.closest('[data-rdel]')) {
+      const r = await modal({ title:'이 요청을 삭제할까요?', body: esc(x.text.slice(0, 120)), buttons:[{ label:'취소', value:false }, { label:'삭제', value:true, cls:'pri' }] });
+      if (!r.v) return; await api('reqDelete', { id:x.id }); toast('삭제했어요'); loadReq();
+    }
+    if (e.target.closest('[data-red]')) {
+      const r = await modal({ title:'개선요청 수정', fields:[{ k:'author', label:'작성자', value:x.author }, { k:'text', label:'요청사항', type:'textarea', value:x.text }],
+        buttons:[{ label:'취소', value:false }, { label:'저장', value:true, cls:'pri' }], focus:'text' });
+      if (!r.v) return;
+      const author = clean(r.vals.author), text = (r.vals.text || '').trim();
+      if (!author || !text) return toast('작성자와 요청사항을 입력해 주세요');
+      await api('reqUpdate', { id:x.id, author, text }); toast('수정했어요'); loadReq();
+    }
+    if (e.target.closest('[data-rop]')) {
+      const pw = await adminPw(); if (!pw) return;
+      const r = await modal({ title:`No.${x.no} 의견`, fields:[{ k:'op', label:'의견 (관리자)', type:'textarea', value:x.opinion }],
+        buttons:[{ label:'취소', value:false }, { label:'저장', value:true, cls:'pri' }] });
+      if (!r.v) return;
+      if (await review(x, { opinion:(r.vals.op || '').trim() })) { toast('의견을 저장했어요'); loadReq(); }
+    }
+  } catch(err) { toast(err.message); }
+});
+// 시작할 때 목록을 한 번 받아 탭의 숫자(검토·작업중)를 보여 줌
+if (CONFIG.SERVER_URL) loadReq(true); else $('#rqInfo').textContent = '서버 주소가 아직 설정되지 않았어요 (index.html CONFIG.SERVER_URL)';
+try { if (sessionStorage.getItem('dl_tab') === 'req') showTab('req'); } catch(e) {}
 
 /* ================== 앱으로 설치 ================== */
 // 저장 스크립트: 인식 도구를 휴대폰에 저장 (구글시트는 저장하지 않아 항상 실시간)

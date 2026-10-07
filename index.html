@@ -1099,7 +1099,7 @@ for (const [b, f] of [['#bCam','#fCam'],['#bAlb','#fAlb']]) {
   $(b).addEventListener('click', () => { $(f).value = ''; $(f).click(); for (let i=0;i<PAR;i++) ocrWorker(i).catch(()=>{}); zx().catch(()=>{}); });   // 고르는 동안 도구를 미리 받기 시작
   $(f).addEventListener('change', e => onFile(e.target.files[0]));
 }
-$('#bNew').addEventListener('click', () => { Object.keys(F).filter(k => k !== 'req').forEach(k => setField(k, '')); Object.assign(ctx, { pur:'', a:{}, sent:'' }); showCands([]); showProjAlt([]); $('#shot').style.display = 'none'; refresh(); F.proj.focus(); });
+$('#bNew').addEventListener('click', () => { Object.keys(F).forEach(k => setField(k, '')); Object.assign(ctx, { pur:'', a:{}, sent:'' }); showCands([]); showProjAlt([]); $('#shot').style.display = 'none'; refresh(); F.proj.focus(); });
 
 /* 검색 드롭다운 (초성 검색 지원) */
 function matchScore(q, s, pre){
@@ -1160,9 +1160,9 @@ let srcProj = null, srcPn = null, srcVen = null;
 combo(F.proj, $('#dProj'), byCode(() => srcProj ||= S.proj.map(p => ({ v:p.name, sub:p.type }))));
 combo(F.pn, $('#dPn'), byCode(() => srcPn ||= [...S.parts.values()].map(p => ({ v:p.pn, sub:fmtName(p.name) }))), () => { showCands([]); applyLearn({ proj:false, ven:false }); });
 combo(F.ven, $('#dVen'), byName(() => srcVen ||= S.vendors.map(v => ({ v:v.name, sub:v.big }))), null, '결과 없음');
-combo(F.req, $('#dReq'), byName(() => S.finders.map(n => ({ v:n }))), () => store.set('dl_req', clean(F.req.value)), '명단에 없음 — 그대로 입력돼요');
-F.req.addEventListener('change', () => store.set('dl_req', clean(F.req.value)));   // 요청자는 다음에도 그대로
-F.req.value = store.get('dl_req', '');
+combo(F.req, $('#dReq'), byName(() => S.finders.map(n => ({ v:n }))), null, '명단에 없음 — 그대로 입력돼요');
+// 요청자는 기억하지 않음: 휴대폰을 여러 명이 같이 쓰므로 항상 빈칸에서 초성 검색으로 고름 (예전에 저장된 값은 지움)
+try { localStorage.removeItem('dl_req'); } catch(e) {}
 F.qty.addEventListener('input', refresh); F.txt.addEventListener('input', refresh);
 
 /* 복사 */

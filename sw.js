@@ -4,9 +4,9 @@
  * - 구글시트·학습 기록: 저장하지 않음 → 항상 실시간
  * 인식 도구 버전을 바꾸면 아래 VERSION 숫자를 올려 주세요.
  */
-const VERSION = 'v2';   // v2: 아이콘을 NB+M으로 교체 (2026-10-07)
+const VERSION = 'v3';   // v3: 왼쪽 위 회사 로고 추가 (2026-10-07)
 const APP = 'dl-app-' + VERSION, LIB = 'dl-lib-' + VERSION;
-const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'];
+const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './ninebell-logo.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(APP).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));

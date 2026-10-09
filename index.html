@@ -113,6 +113,9 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .chip{font:inherit;font-size:12px;border:1px solid var(--bd);border-radius:2em;padding:3px 10px;background:var(--bg2);cursor:pointer;color:var(--fg);text-align:left}
 .chip:hover{border-color:var(--acc)}
 .chip small{color:var(--mut);margin-left:4px}
+.qpn{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.qpn .chip{padding:4px 12px;font-weight:600}
+.qpn .chip.on{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
 .ask{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
 .btn.askb.on{background:var(--warn-bg);border-color:var(--warn);color:var(--warn);font-weight:600}
 .btn.askb.on::before{content:'✓ '}
@@ -179,6 +182,8 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
         <label for="iPn"><span class="no">2</span>품번 <span class="tag" id="tPn"></span></label>
         <div class="combo"><input id="iPn" autocomplete="off" autocapitalize="characters" placeholder="입력 필요"><div class="dd" id="dPn"></div></div>
         <div class="hint" id="hPn"></div>
+        <div class="qpn" id="qPn"></div>
+        <div class="hint">프레임, 버퍼의 경우 버튼 클릭해주세요</div>
         <div class="cands" id="cPn"></div>
       </div>
       <div class="f">
@@ -255,6 +260,7 @@ const CONFIG = {
   PARTS: { gid: '1577658176', range: 'A:L' },   // 품명/품번 시트: 품번·품명·발견자(요청자). 행 수 제한 없이 끝까지 읽음 (2026-10 기준 약 7.8만 행)
   // 라벨에 적힌 업체 이름 → 시트(귀책 목록)에 있는 이름. 왼쪽은 (주)·㈜·주식회사·공백·점을 뺀 글자로 적기
   ASK_VENDOR: '확인요청',   // 귀책을 모를 때 [확인요청] 버튼을 누르면 귀책 칸에 들어가는 글자
+  QUICK_PN: ['EFEM FRAME', 'PROCESS FRAME', 'BUFFER'],   // 품번 바로 선택 버튼 (품질팀 변환기의 품명 빠른 입력과 같은 목록)
   // 서버 주소: 학습기록_AppsScript.gs 를 웹 앱으로 배포한 뒤 그 주소(…/exec)를 넣기.
   //   - 학습 기록: 사람이 확인한 값(발주번호·품번 → 프로젝트·귀책)을 모든 휴대폰이 같이 씀
   //   - 개선요청 탭: 요청 목록 저장 (제조팀 전용, 품질팀 변환기와 따로)
@@ -508,7 +514,7 @@ function learnLocal(r){   // 이 휴대폰에서 바로 반영 (서버 요약은
   const put = (m, k, f, val) => { if (!k || !val || val === CONFIG.ASK_VENDOR) return; const o = m[k] ||= {};
     o[f] = o[f] && o[f][0] === val ? [val, o[f][1] + 1] : [val, 1]; };
   put(LEARN.pur, r.pur, 'p', r.proj); put(LEARN.pur, r.pur, 'v', r.ven);
-  put(LEARN.pn, key(r.pn), 'p', r.proj); put(LEARN.pn, key(r.pn), 'v', r.ven);
+  if (!quickPn(r.pn)) { put(LEARN.pn, key(r.pn), 'p', r.proj); put(LEARN.pn, key(r.pn), 'v', r.ven); }   // EFEM FRAME 등은 품번 기준 학습 안 함
 }
 async function flushLearn(){   // 못 보낸 기록을 보냄 (인터넷이 끊겼으면 다음에 다시)
   if (!learnOn() || flushLearn.busy) return;
@@ -1074,13 +1080,23 @@ const ctx = { pur:'', a:{}, sent:'' };              // 이번 사진: 발주번�
 function step(t, pct){ $('#pT').textContent = t; if (pct != null) $('#pB').style.width = pct + '%'; }
 function tag(id, kind, text){ const e = $(id); if (!e) return; e.className = 'tag' + (kind ? ' ' + kind : ''); e.textContent = text || ''; }
 function partInfo(v){ return S.parts.get(key(v)); }
+// 품번 바로 선택 (EFEM FRAME 등): 품번이 없는 품목. 같은 버튼을 다시 누르면 지움
+const quickPn = v => { const k = clean(v).toUpperCase(); return CONFIG.QUICK_PN.find(n => n === k) || ''; };
+$('#qPn').innerHTML = CONFIG.QUICK_PN.map(n => `<button class="chip" type="button" data-qpn="${esc(n)}">${esc(n)}</button>`).join('');
+$('#qPn').addEventListener('click', e => {
+  const b = e.target.closest('[data-qpn]'); if (!b) return;
+  const on = quickPn(F.pn.value) === b.dataset.qpn;
+  setField('pn', on ? '' : b.dataset.qpn); showCands([]); refresh();
+});
 function refresh(){
   for (const [k, el] of Object.entries(F)) el.classList.toggle('need', !clean(el.value));
   F.qty.value = F.qty.value.replace(/\D/g,'');
   for (const k of ['proj','pn','qty','ven']) if (auto[k] && clean(F[k].value) !== auto[k]) { auto[k] = ''; tag('#t'+k[0].toUpperCase()+k.slice(1), '', ''); }
   const pi = clean(F.pn.value) ? partInfo(F.pn.value) : null;
   const hp = $('#hPn');
-  if (!clean(F.pn.value)) { hp.textContent = ''; hp.className = 'hint'; }
+  const qn = quickPn(F.pn.value);
+  document.querySelectorAll('#qPn [data-qpn]').forEach(b => b.classList.toggle('on', b.dataset.qpn === qn));
+  if (!clean(F.pn.value) || qn) { hp.textContent = ''; hp.className = 'hint'; }
   else if (pi) { hp.textContent = '품명: ' + (fmtName(pi.name) || '-'); hp.className = 'hint'; }
   else if (S.parts.size) { hp.textContent = '품번 목록에 없는 번호예요. 다시 확인해 주세요.'; hp.className = 'hint w'; }
   const pr = clean(F.proj.value), hj = $('#hProj');
@@ -1114,7 +1130,7 @@ function setField(k, v, kind, label){
 // 학습 기록 적용. 발주번호 기록은 사진에서 읽은 값보다 우선, 품번 기록은 비었거나 불확실한 칸(weak)만
 function applyLearn(weak = { proj:true, ven:true }){
   if (!learnOn()) return [];
-  const a = ctx.pur && LEARN.pur[ctx.pur], b = LEARN.pn[key(F.pn.value)], used = [];
+  const a = ctx.pur && LEARN.pur[ctx.pur], b = quickPn(F.pn.value) ? null : LEARN.pn[key(F.pn.value)], used = [];
   for (const [k, f] of [['proj','p'], ['ven','v']]) {
     const cur = clean(F[k].value);
     if (a && a[f] && (!cur || a[f][0] !== cur)) { setField(k, a[f][0], 'learn', `이전 기록 · 발주번호 ${a[f][1]}회`); used.push(k); continue; }

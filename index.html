@@ -210,7 +210,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
       <div class="f">
         <label for="iPs"><span class="no">7</span>비고</label>
         <input id="iPs" autocomplete="off" placeholder="필요할 때만 입력">
-        <div class="ask"><button class="btn sm selfb" id="bSelf" type="button">자체처리 완료</button><span class="mut">자체처리 진행 경우에만 클릭해주세요</span></div>
+        <div class="ask"><button class="btn sm selfb" id="bSelf" type="button">자체처리</button><span class="mut">자체처리 예정 또는 완료한 경우에만 클릭해주세요</span></div>
       </div>
     </div>
   </section>
@@ -1083,8 +1083,8 @@ function cropFor(rot, c){
 /* ================== 화면 ================== */
 const F = { proj:$('#iProj'), pn:$('#iPn'), qty:$('#iQty'), txt:$('#iTxt'), ven:$('#iVen'), req:$('#iReq'), ps:$('#iPs') };
 const OPTIONAL = new Set(['ps']);   // 비고는 비어 있어도 됨 (분홍색 표시·빈 칸 안내 안 함)
-// 자체처리 완료: 버튼을 켜면 비고에 '자체처리 완료'를 넣고, 끄면 뺌. 비고에 직접 적어도 버튼이 켜짐
-const SELF_DONE = '자체처리 완료', SELF_RE = /\s*자체\s*처리\s*완료\s*[,/]?\s*/;
+// 자체처리: 버튼을 켜면 비고에 '자체처리'를 넣고, 끄면 뺌. 비고에 직접 적어도 버튼이 켜짐 ('자체처리 완료'·'예정'도 인정)
+const SELF_DONE = '자체처리', SELF_RE = /\s*자체\s*처리(?:\s*(?:완료|예정))?\s*[,/]?\s*/;
 const hasSelf = v => SELF_RE.test(v || '');
 const auto = { proj:'', pn:'', qty:'', ven:'' };   // 자동으로 채운 값(사용자가 고치면 표시 사라짐)
 const ctx = { pur:'', a:{}, sent:'' };              // 이번 사진: 발주번호, 사진에서 읽은 값(학습 기록용), 마지막으로 보낸 기록
@@ -1359,7 +1359,7 @@ F.qty.addEventListener('input', refresh); F.txt.addEventListener('input', refres
 $('#bSelf').addEventListener('click', () => {
   const v = clean(F.ps.value);
   F.ps.value = hasSelf(v) ? clean(v.replace(SELF_RE, ' ')) : (v ? SELF_DONE + ', ' + v : SELF_DONE);
-  refresh(); toast(hasSelf(F.ps.value) ? '비고에 자체처리 완료를 넣었어요' : '자체처리 완료를 뺐어요');
+  refresh(); toast(hasSelf(F.ps.value) ? '비고에 자체처리를 넣었어요' : '자체처리를 뺐어요');
 });
 
 /* 복사 */

@@ -1348,12 +1348,13 @@ function nameScore(q, name){
   if (!qq) return 1; if (n.startsWith(qq)) return 4; if (n.includes(qq)) return 3; if (c.startsWith(qc)) return 2; if (c.includes(qc)) return 1; return 0;
 }
 const byName = list => q => list().map(x => ({ x, s:nameScore(q, x.v) })).filter(o => o.s >= 1).sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x);
-// 프로젝트·품번 검색 (품번은 O↔0 같은 헷갈리는 글자도 찾음)
+// 프로젝트·품번 검색 (품번은 O↔0 같은 헷갈리는 글자도 찾음). 목록은 최대 3개만 (더 찾으려면 더 입력)
+const CODE_MAX = 3;
 const byCode = list => q => {
   const raw = splitJamo(clean(q)); const qq = { l: raw.toLowerCase(), n: normC(raw), c: /[ㄱ-ㅎ]/.test(raw) ? choseong(raw.toLowerCase()) : '' };
   const all = list();
-  return !raw ? all.slice(0, 30) : all.map(x => ({ x, s: Math.max(matchScore(qq, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(qq, x.sub) - 1 : 0) })).filter(o => o.s > 0)
-    .sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x);
+  return !raw ? all.slice(0, CODE_MAX) : all.map(x => ({ x, s: Math.max(matchScore(qq, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(qq, x.sub) - 1 : 0) })).filter(o => o.s > 0)
+    .sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, CODE_MAX).map(o => o.x);
 };
 function combo(input, dd, search, onPick, empty){
   let act = 0, items = [];
@@ -1369,6 +1370,11 @@ function combo(input, dd, search, onPick, empty){
   const pick = i => { if (!items[i]) return; input.value = items[i].v; dd.style.display = 'none'; onPick && onPick(items[i]); refresh(); };
   input.addEventListener('input', () => { show(); refresh(); });
   input.addEventListener('focus', show);
+  // 이미 입력 중인 칸을 다시 누르면 목록을 닫고, 한 번 더 누르면 다시 엶
+  input.addEventListener('pointerdown', () => { if (document.activeElement !== input) return;
+    if (dd.style.display === 'block') dd.style.display = 'none'; else show(); });
+  // 다른 곳을 누르면 목록 닫기 (휴대폰에서 글자칸 밖을 눌러도 입력칸이 안 빠지는 경우가 있어서)
+  document.addEventListener('pointerdown', e => { if (dd.style.display === 'block' && e.target !== input && !dd.contains(e.target)) dd.style.display = 'none'; }, true);
   input.addEventListener('blur', () => { if (input._keep) return; setTimeout(() => { if (document.activeElement !== input) dd.style.display = 'none'; }, 150); });
   input.addEventListener('keydown', e => {
     if (dd.style.display !== 'block') return;

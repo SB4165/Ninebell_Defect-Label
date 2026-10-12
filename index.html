@@ -1348,12 +1348,12 @@ function nameScore(q, name){
   if (!qq) return 1; if (n.startsWith(qq)) return 4; if (n.includes(qq)) return 3; if (c.startsWith(qc)) return 2; if (c.includes(qc)) return 1; return 0;
 }
 const byName = list => q => list().map(x => ({ x, s:nameScore(q, x.v) })).filter(o => o.s >= 1).sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x);
-// 프로젝트·품번 검색 (품번은 O↔0 같은 헷갈리는 글자도 찾음). 목록은 최대 3개만 (더 찾으려면 더 입력)
+// 프로젝트·품번 검색 (품번은 O↔0 같은 헷갈리는 글자도 찾음). 한 글자라도 입력해야 목록이 뜨고, 최대 3개만 (더 찾으려면 더 입력)
 const CODE_MAX = 3;
 const byCode = list => q => {
   const raw = splitJamo(clean(q)); const qq = { l: raw.toLowerCase(), n: normC(raw), c: /[ㄱ-ㅎ]/.test(raw) ? choseong(raw.toLowerCase()) : '' };
   const all = list();
-  return !raw ? all.slice(0, CODE_MAX) : all.map(x => ({ x, s: Math.max(matchScore(qq, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(qq, x.sub) - 1 : 0) })).filter(o => o.s > 0)
+  return !raw ? [] : all.map(x => ({ x, s: Math.max(matchScore(qq, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(qq, x.sub) - 1 : 0) })).filter(o => o.s > 0)
     .sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, CODE_MAX).map(o => o.x);
 };
 function combo(input, dd, search, onPick, empty){

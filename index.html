@@ -128,7 +128,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .qpn .chip.on{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
 .ask{display:flex;align-items:center;gap:8px;margin-top:6px}
 .ask>.btn{flex:none}.ask>.mut{flex:1;min-width:0;line-height:1.4}
-.lnote{font-weight:400;font-size:12px}
+.f label:has(.lnote){white-space:nowrap}.lnote{font-weight:400;font-size:12px;white-space:normal;flex:1;min-width:0;line-height:1.4}.nw{white-space:nowrap}
 .btn.askb.on{background:var(--warn-bg);border-color:var(--warn);color:var(--warn);font-weight:600}
 .btn.askb.on::before{content:'✓ '}
 .btn.selfb.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}
@@ -192,10 +192,10 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
         <div class="hint" id="hProj"></div>
         <div class="cands" id="cProj"></div>
         <div id="xProj"></div>
-        <div class="ask"><button class="btn sm" id="addProj" type="button">+ 프로젝트 추가</button><span class="mut">동일 품번, 동일 불량의 다른 프로젝트 인 경우에만 추가 입력</span></div>
+        <div class="ask"><button class="btn sm" id="addProj" type="button">+ 프로젝트 추가</button><span class="mut">동일 품번, 동일 불량의 다른 프로젝트인 경우에만 눌러주세요</span></div>
       </div>
       <div class="f">
-        <label for="iPn"><span class="no">2</span>품번 <span class="mut lnote">'-' 입력 안 해도 돼요</span> <span class="tag" id="tPn"></span></label>
+        <label for="iPn"><span class="no">2</span>품번 <span class="mut lnote">하이픈(-), 띄어쓰기 무관, 예시) <span class="nw">HIZ01100M100 → HIZ01-100M10-0</span> 으로 인식</span> <span class="tag" id="tPn"></span></label>
         <div class="combo"><input id="iPn" autocomplete="off" autocapitalize="characters" placeholder="입력 필요"><div class="dd" id="dPn"></div></div>
         <div class="hint" id="hPn"></div>
         <div class="qpn" id="qPn"></div>

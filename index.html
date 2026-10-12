@@ -119,6 +119,8 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .ask{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
 .btn.askb.on{background:var(--warn-bg);border-color:var(--warn);color:var(--warn);font-weight:600}
 .btn.askb.on::before{content:'✓ '}
+.btn.selfb.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}
+.btn.selfb.on::before{content:'✓ '}
 .qty{display:flex;align-items:center;gap:6px}
 .qty input{max-width:120px}
 .qty span{color:var(--mut);font-size:13px;font-weight:600}
@@ -204,6 +206,11 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
         <label for="iReq"><span class="no">6</span>요청자 <span class="tag" id="tReq"></span></label>
         <div class="combo"><input id="iReq" autocomplete="off" placeholder="입력 필요 · 초성 검색 (예: ㄱㅅㅂ)"><div class="dd" id="dReq"></div></div>
         <div class="hint" id="hReq"></div>
+      </div>
+      <div class="f">
+        <label for="iPs"><span class="no">7</span>비고</label>
+        <input id="iPs" autocomplete="off" placeholder="필요할 때만 입력">
+        <div class="ask"><button class="btn sm selfb" id="bSelf" type="button">자체처리 완료</button><span class="mut">자체처리 진행 경우에만 클릭해주세요</span></div>
       </div>
     </div>
   </section>
@@ -1074,7 +1081,11 @@ function cropFor(rot, c){
 }
 
 /* ================== 화면 ================== */
-const F = { proj:$('#iProj'), pn:$('#iPn'), qty:$('#iQty'), txt:$('#iTxt'), ven:$('#iVen'), req:$('#iReq') };
+const F = { proj:$('#iProj'), pn:$('#iPn'), qty:$('#iQty'), txt:$('#iTxt'), ven:$('#iVen'), req:$('#iReq'), ps:$('#iPs') };
+const OPTIONAL = new Set(['ps']);   // 비고는 비어 있어도 됨 (분홍색 표시·빈 칸 안내 안 함)
+// 자체처리 완료: 버튼을 켜면 비고에 '자체처리 완료'를 넣고, 끄면 뺌. 비고에 직접 적어도 버튼이 켜짐
+const SELF_DONE = '자체처리 완료', SELF_RE = /\s*자체\s*처리\s*완료\s*[,/]?\s*/;
+const hasSelf = v => SELF_RE.test(v || '');
 const auto = { proj:'', pn:'', qty:'', ven:'' };   // 자동으로 채운 값(사용자가 고치면 표시 사라짐)
 const ctx = { pur:'', a:{}, sent:'' };              // 이번 사진: 발주번호, 사진에서 읽은 값(학습 기록용), 마지막으로 보낸 기록
 function step(t, pct){ $('#pT').textContent = t; if (pct != null) $('#pB').style.width = pct + '%'; }
@@ -1089,7 +1100,8 @@ $('#qPn').addEventListener('click', e => {
   setField('pn', on ? '' : b.dataset.qpn); showCands([]); refresh();
 });
 function refresh(){
-  for (const [k, el] of Object.entries(F)) el.classList.toggle('need', !clean(el.value));
+  for (const [k, el] of Object.entries(F)) el.classList.toggle('need', !OPTIONAL.has(k) && !clean(el.value));
+  $('#bSelf').classList.toggle('on', hasSelf(F.ps.value));
   F.qty.value = F.qty.value.replace(/\D/g,'');
   for (const k of ['proj','pn','qty','ven']) if (auto[k] && clean(F[k].value) !== auto[k]) { auto[k] = ''; tag('#t'+k[0].toUpperCase()+k.slice(1), '', ''); }
   const pi = clean(F.pn.value) ? partInfo(F.pn.value) : null;
@@ -1119,6 +1131,7 @@ function refresh(){
     `4. 불량내용 : ${clean(F.txt.value)}`,
     `5. 귀책 : ${vn}`,
     `6. 요청자 : ${clean(F.req.value)}`,
+    `7. 비고 : ${clean(F.ps.value)}`,
   ].join('\n');
   const miss = [['프로젝트명',F.proj],['품번',F.pn],['수량',F.qty],['불량내용',F.txt],['귀책',F.ven],['요청자',F.req]].filter(([,e]) => !clean(e.value)).map(([n]) => n);
   const wo = $('#wOut'); wo.style.display = miss.length ? '' : 'none'; wo.textContent = miss.length ? '비어 있는 칸: ' + miss.join(', ') : '';
@@ -1342,7 +1355,12 @@ combo(F.req, $('#dReq'), byName(() => S.finders.map(n => ({ v:n }))), () => stor
 F.req.addEventListener('change', () => store.set('dl_req2', clean(F.req.value)));
 try { localStorage.removeItem('dl_req'); } catch(e) {}
 F.req.value = store.get('dl_req2', '');
-F.qty.addEventListener('input', refresh); F.txt.addEventListener('input', refresh);
+F.qty.addEventListener('input', refresh); F.txt.addEventListener('input', refresh); F.ps.addEventListener('input', refresh);
+$('#bSelf').addEventListener('click', () => {
+  const v = clean(F.ps.value);
+  F.ps.value = hasSelf(v) ? clean(v.replace(SELF_RE, ' ')) : (v ? SELF_DONE + ', ' + v : SELF_DONE);
+  refresh(); toast(hasSelf(F.ps.value) ? '비고에 자체처리 완료를 넣었어요' : '자체처리 완료를 뺐어요');
+});
 
 /* 복사 */
 async function copyText(t){

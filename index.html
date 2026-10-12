@@ -188,20 +188,20 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
     <div class="box-b">
       <div class="f">
         <label for="iProj"><span class="no">1</span>프로젝트명 <span class="tag" id="tProj"></span></label>
-        <div class="combo"><input id="iProj" autocomplete="off" placeholder="입력 필요"><div class="dd" id="dProj"></div></div>
+        <div class="combo"><input id="iProj" autocomplete="off" placeholder="입력 필요"><div class="dd dd3" id="dProj"></div></div>
         <div class="hint" id="hProj"></div>
         <div class="cands" id="cProj"></div>
         <div id="xProj"></div>
-        <div class="ask"><button class="btn sm" id="addProj" type="button">+ 프로젝트 추가</button><span class="mut">동일 품번, 동일 불량의 다른 프로젝트인 경우에만 눌러주세요</span></div>
+        <div class="ask"><button class="btn sm" id="addProj" type="button">+ 프로젝트 추가</button><span class="mut">타 장비 횡전개 불량 처리 필요 시 클릭 (동일 품번·동일 불량)</span></div>
       </div>
       <div class="f">
-        <label for="iPn"><span class="no">2</span>품번 <span class="mut lnote">하이픈(-), 띄어쓰기 무관, 예시) <span class="nw">HIZ01100M100 → HIZ01-100M10-0</span> 으로 인식</span> <span class="tag" id="tPn"></span></label>
-        <div class="combo"><input id="iPn" autocomplete="off" autocapitalize="characters" placeholder="입력 필요"><div class="dd" id="dPn"></div></div>
+        <label for="iPn"><span class="no">2</span>품번 <span class="mut lnote">하이픈(-), 띄어쓰기 무관</span> <span class="tag" id="tPn"></span></label>
+        <div class="combo"><input id="iPn" autocomplete="off" autocapitalize="characters" placeholder="입력 필요"><div class="dd dd3" id="dPn"></div></div>
         <div class="hint" id="hPn"></div>
         <div class="qpn" id="qPn"></div>
         <div class="hint">품번 입력이 어려운 프레임, 버퍼의 경우 버튼을 클릭해주세요</div>
         <div id="xPn"></div>
-        <button class="btn sm addb" id="addPn" type="button">+ 품번 추가</button>
+        <div class="ask"><button class="btn sm" id="addPn" type="button">+ 품번 추가</button><span class="mut">동일 프로젝트, 동일 불량인 경우 클릭</span></div>
         <div class="hint" id="hMulti"></div>
         <div class="cands" id="cPn"></div>
       </div>
@@ -1357,12 +1357,12 @@ function nameScore(q, name){
   if (!qq) return 1; if (n.startsWith(qq)) return 4; if (n.includes(qq)) return 3; if (c.startsWith(qc)) return 2; if (c.includes(qc)) return 1; return 0;
 }
 const byName = list => q => list().map(x => ({ x, s:nameScore(q, x.v) })).filter(o => o.s >= 1).sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, 30).map(o => o.x);
-// 프로젝트·품번 검색 (품번은 O↔0 같은 헷갈리는 글자도 찾음). 한 글자라도 입력해야 목록이 뜨고, 최대 3개만 (더 찾으려면 더 입력)
-const CODE_MAX = 3;
+// 프로젝트·품번 검색 (품번은 O↔0 같은 헷갈리는 글자도 찾음). 3글자부터 검색, 목록은 3줄 높이로 보이고 스크롤해서 더 봄
+const CODE_MIN = 3, CODE_MAX = 30;
 const byCode = list => q => {
   const raw = splitJamo(clean(q)); const qq = { l: raw.toLowerCase(), n: normC(raw), c: /[ㄱ-ㅎ]/.test(raw) ? choseong(raw.toLowerCase()) : '' };
   const all = list();
-  return !raw ? [] : all.map(x => ({ x, s: Math.max(matchScore(qq, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(qq, x.sub) - 1 : 0) })).filter(o => o.s > 0)
+  return raw.replace(/\s/g, '').length < CODE_MIN ? [] : all.map(x => ({ x, s: Math.max(matchScore(qq, x.v, x._v ||= { l:x.v.toLowerCase(), c:choseong(x.v.toLowerCase()) }), x.sub ? matchScore(qq, x.sub) - 1 : 0) })).filter(o => o.s > 0)
     .sort((a,b) => b.s - a.s || ko(a.x.v, b.x.v)).slice(0, CODE_MAX).map(o => o.x);
 };
 function combo(input, dd, search, onPick, empty){
@@ -1375,6 +1375,9 @@ function combo(input, dd, search, onPick, empty){
       || (empty && clean(input.value) ? `<div><small>${empty}</small></div>` : '');
     mark();   // 첫 항목을 미리 선택 → Enter로 바로 고름
     dd.style.display = dd.innerHTML && document.activeElement === input ? 'block' : 'none';
+    if (dd.classList.contains('dd3') && dd.style.display === 'block') {   // 3줄 높이만 보이고 나머지는 스크롤
+      const c = dd.children; dd.style.maxHeight = c.length > 3 ? (c[3].offsetTop + 2) + 'px' : ''; dd.scrollTop = 0;
+    }
   };
   const pick = i => { if (!items[i]) return; input.value = items[i].v; dd.style.display = 'none'; onPick && onPick(items[i]); refresh(); };
   input.addEventListener('input', () => { show(); refresh(); });
@@ -1414,7 +1417,7 @@ function multiAdd(kind, val = '', qty = ''){
   if (MULTI.kind && MULTI.kind !== kind) return null;
   MULTI.kind = kind;
   const row = document.createElement('div'); row.className = 'xrow';
-  row.innerHTML = `<span class="xno"></span><div class="combo"><input autocomplete="off"${kind === 'pn' ? ' autocapitalize="characters"' : ''} placeholder="입력 필요 · 검색 또는 사진"><div class="dd"></div></div><button class="btn sm xdel" type="button" aria-label="이 칸 지우기">✕</button>`;
+  row.innerHTML = `<span class="xno"></span><div class="combo"><input autocomplete="off"${kind === 'pn' ? ' autocapitalize="characters"' : ''} placeholder="입력 필요 · 검색 또는 사진"><div class="dd dd3"></div></div><button class="btn sm xdel" type="button" aria-label="이 칸 지우기">✕</button>`;
   const hint = document.createElement('div'); hint.className = 'hint';
   const xq = document.createElement('div'); xq.className = 'qpn';   // 2번 칸: 프레임 바로 선택 버튼
   $(kind === 'proj' ? '#xProj' : '#xPn').append(row, xq, hint);

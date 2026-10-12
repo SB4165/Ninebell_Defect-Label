@@ -88,6 +88,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 /* 화면 안 카메라 (카메라 앱으로 넘어가지 않음 → 갤럭시에서 페이지가 새로 열리며 사진이 사라지는 문제 방지) */
 .cam{position:fixed;inset:0;z-index:70;background:#000;display:flex;flex-direction:column}
 .cam[hidden],.cam .cmsg[hidden]{display:none}
+.ask[hidden]{display:none}
 .cam video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
 .cam .ctop{position:absolute;top:0;left:0;right:0;padding:max(12px,env(safe-area-inset-top)) 16px 12px;color:#fff;font-size:13px;text-align:center;background:linear-gradient(rgba(0,0,0,.55),transparent);pointer-events:none}
 .cam .cbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px max(18px,env(safe-area-inset-bottom));background:#000}
@@ -114,6 +115,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .chip:hover{border-color:var(--acc)}
 .chip small{color:var(--mut);margin-left:4px}
 .qpn{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.qpn:empty{display:none}
 /* 여러 건 (같은 불량: 프로젝트 여러 개 또는 품번 여러 개) */
 .addb{margin-top:8px}
 .xrow{display:flex;gap:6px;align-items:center;margin-top:8px}
@@ -124,7 +126,9 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 #qMore .qty{margin-top:6px}
 .qpn .chip{padding:4px 12px;font-weight:600}
 .qpn .chip.on{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
-.ask{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.ask{display:flex;align-items:center;gap:8px;margin-top:6px}
+.ask>.btn{flex:none}.ask>.mut{flex:1;min-width:0;line-height:1.4}
+.lnote{font-weight:400;font-size:12px}
 .btn.askb.on{background:var(--warn-bg);border-color:var(--warn);color:var(--warn);font-weight:600}
 .btn.askb.on::before{content:'✓ '}
 .btn.selfb.on{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:600}
@@ -188,14 +192,14 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
         <div class="hint" id="hProj"></div>
         <div class="cands" id="cProj"></div>
         <div id="xProj"></div>
-        <button class="btn sm addb" id="addProj" type="button">+ 프로젝트 추가</button>
+        <div class="ask"><button class="btn sm" id="addProj" type="button">+ 프로젝트 추가</button><span class="mut">동일 품번, 동일 불량의 다른 프로젝트 인 경우에만 추가 입력</span></div>
       </div>
       <div class="f">
-        <label for="iPn"><span class="no">2</span>품번 <span class="tag" id="tPn"></span></label>
+        <label for="iPn"><span class="no">2</span>품번 <span class="mut lnote">'-' 입력 안 해도 돼요</span> <span class="tag" id="tPn"></span></label>
         <div class="combo"><input id="iPn" autocomplete="off" autocapitalize="characters" placeholder="입력 필요"><div class="dd" id="dPn"></div></div>
         <div class="hint" id="hPn"></div>
         <div class="qpn" id="qPn"></div>
-        <div class="hint">프레임, 버퍼의 경우 버튼 클릭해주세요</div>
+        <div class="hint">품번 입력이 어려운 프레임, 버퍼의 경우 버튼을 클릭해주세요</div>
         <div id="xPn"></div>
         <button class="btn sm addb" id="addPn" type="button">+ 품번 추가</button>
         <div class="hint" id="hMulti"></div>
@@ -205,7 +209,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
         <label for="iQty"><span class="no">3</span>수량 <span class="tag" id="tQty"></span></label>
         <div class="qty"><span class="qlab" id="qLab1" hidden></span><input id="iQty" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="입력 필요"><span>EA</span></div>
         <div id="qMore"></div>
-        <button class="btn sm addb" id="qSame" type="button" hidden>모두 같은 수량</button>
+        <div class="ask" id="qSameBox" hidden><button class="btn sm" id="qSame" type="button">모두 같은 수량</button><span class="mut">각 품번 불량 수량이 동일한 경우 버튼을 클릭해주세요</span></div>
       </div>
       <div class="f">
         <label for="iTxt"><span class="no">4</span>불량내용</label>
@@ -213,13 +217,13 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
       </div>
       <div class="f">
         <label for="iVen"><span class="no">5</span>귀책 <span class="tag" id="tVen"></span></label>
-        <div class="combo"><input id="iVen" autocomplete="off" placeholder="입력 필요 · 업체명 초성 검색 (예: ㅇㅍ)"><div class="dd" id="dVen"></div></div>
+        <div class="combo"><input id="iVen" autocomplete="off" placeholder="입력 필요 · 초성 검색 가능 (예: ㅇㅍ)"><div class="dd" id="dVen"></div></div>
         <div class="hint" id="hVen"></div>
         <div class="ask"><button class="btn sm askb" id="bAsk" type="button">확인요청</button><span class="mut">귀책 확인이 필요한 경우 클릭</span></div>
       </div>
       <div class="f">
         <label for="iReq"><span class="no">6</span>요청자 <span class="tag" id="tReq"></span></label>
-        <div class="combo"><input id="iReq" autocomplete="off" placeholder="입력 필요 · 초성 검색 (예: ㄱㅅㅂ)"><div class="dd" id="dReq"></div></div>
+        <div class="combo"><input id="iReq" autocomplete="off" placeholder="입력 필요 · 초성 검색 가능 (예: ㄱㅅㅂ)"><div class="dd" id="dReq"></div></div>
         <div class="hint" id="hReq"></div>
       </div>
       <div class="f">
@@ -245,7 +249,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
     <div class="box-b">
       <div class="rqform">
         <label for="rqAuthor">작성자</label>
-        <div class="combo"><input id="rqAuthor" autocomplete="off" placeholder="입력 필요 · 초성 검색 (예: ㄱㄷㅎ)"><div class="dd" id="dRqa"></div></div>
+        <div class="combo"><input id="rqAuthor" autocomplete="off" placeholder="입력 필요 · 초성 검색 가능 (예: ㄱㄷㅎ)"><div class="dd" id="dRqa"></div></div>
         <label for="rqText">요청사항</label>
         <textarea id="rqText" placeholder="입력 필요 (예: 사진 찍고 나서 수량도 자동으로 들어가면 좋겠어요)"></textarea>
         <span></span><div><button class="btn pri" id="rqAdd" type="button">등록</button></div>
@@ -1106,6 +1110,12 @@ const ctx = { pur:'', a:{}, sent:'' };              // 이번 사진: 발주번�
 function step(t, pct){ $('#pT').textContent = t; if (pct != null) $('#pB').style.width = pct + '%'; }
 function tag(id, kind, text){ const e = $(id); if (!e) return; e.className = 'tag' + (kind ? ' ' + kind : ''); e.textContent = text || ''; }
 function partInfo(v){ return S.parts.get(key(v)); }
+// '-' 없이(또는 소문자로) 친 품번 → 목록에 하나만 맞으면 정식 품번으로 바꿔 줌 (예: eeapt00b10 → EEAP-T00B1-0)
+function fixPn(v){
+  if (!clean(v) || quickPn(v) || partInfo(v)) return v;
+  const hit = [...new Set((IX.pn.get(normC(v)) || []).map(j => IX.list[j].p.pn))];
+  return hit.length === 1 ? hit[0] : v;
+}
 // 품번 바로 선택 (EFEM FRAME 등): 품번이 없는 품목. 같은 버튼을 다시 누르면 지움
 const quickPn = v => { const k = clean(v).toUpperCase(); return CONFIG.QUICK_PN.find(n => n === k) || ''; };
 $('#qPn').innerHTML = CONFIG.QUICK_PN.map(n => `<button class="chip" type="button" data-qpn="${esc(n)}">${esc(n)}</button>`).join('');
@@ -1391,8 +1401,10 @@ function multiAdd(kind, val = '', qty = ''){
   const row = document.createElement('div'); row.className = 'xrow';
   row.innerHTML = `<span class="xno"></span><div class="combo"><input autocomplete="off"${kind === 'pn' ? ' autocapitalize="characters"' : ''} placeholder="입력 필요 · 검색 또는 사진"><div class="dd"></div></div><button class="btn sm xdel" type="button" aria-label="이 칸 지우기">✕</button>`;
   const hint = document.createElement('div'); hint.className = 'hint';
-  $(kind === 'proj' ? '#xProj' : '#xPn').append(row, hint);
+  const xq = document.createElement('div'); xq.className = 'qpn';   // 2번 칸: 프레임 바로 선택 버튼
+  $(kind === 'proj' ? '#xProj' : '#xPn').append(row, xq, hint);
   const inp = row.querySelector('input'); inp.value = val;
+  if (kind === 'pn') inp.addEventListener('change', () => { const f = fixPn(inp.value); if (f !== inp.value) { inp.value = f; refresh(); } });
   combo(inp, row.querySelector('.dd'), kind === 'proj'
     ? byCode(() => srcProj ||= S.proj.map(p => ({ v:p.name, sub:p.type })))
     : byCode(() => srcPn ||= [...S.parts.values()].map(p => ({ v:p.pn, sub:fmtName(p.name) }))));
@@ -1400,7 +1412,9 @@ function multiAdd(kind, val = '', qty = ''){
   qel.innerHTML = `<span class="qlab"></span><input inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="입력 필요"><span>EA</span>`;
   $('#qMore').append(qel);
   const q = qel.querySelector('input'); q.value = qty;
-  const r = { inp, q, row, hint, qel, pur:'' };
+  const r = { inp, q, row, hint, qel, xq, pur:'' };
+  xq.addEventListener('click', e => { const b = e.target.closest('[data-xq]'); if (!b) return;
+    inp.value = quickPn(inp.value) === b.dataset.xq ? '' : b.dataset.xq; refresh(); });
   MULTI.rows.push(r);
   q.addEventListener('input', refresh);
   row.querySelector('.xdel').addEventListener('click', () => multiDel(r));
@@ -1408,7 +1422,7 @@ function multiAdd(kind, val = '', qty = ''){
   return r;
 }
 function multiDel(r){
-  r.row.remove(); r.hint.remove(); r.qel.remove();
+  r.row.remove(); r.hint.remove(); r.qel.remove(); r.xq.remove();
   MULTI.rows = MULTI.rows.filter(x => x !== r); if (!MULTI.rows.length) MULTI.kind = '';
   refresh();
 }
@@ -1434,6 +1448,10 @@ function multiRefresh(){
   MULTI.rows.forEach((r, i) => {
     const v = clean(r.inp.value);
     r.row.querySelector('.xno').textContent = i + 2;
+    // 품번 2번 칸까지만 EFEM FRAME · PROCESS FRAME 버튼 (3번 칸부터는 없음)
+    const xqs = kind === 'pn' && i === 0 ? CONFIG.QUICK_PN.filter(n => /FRAME/.test(n)) : [];
+    const qv = quickPn(v);
+    r.xq.innerHTML = xqs.map(n => `<button class="chip${qv === n ? ' on' : ''}" type="button" data-xq="${esc(n)}">${esc(n)}</button>`).join('');
     r.inp.classList.toggle('need', !v);
     r.q.value = r.q.value.replace(/\D/g, ''); r.q.classList.toggle('need', !clean(r.q.value));
     r.qel.querySelector('.qlab').textContent = (kind === 'pn' ? v.toUpperCase() : v) || `${i+2}번`;
@@ -1443,7 +1461,7 @@ function multiRefresh(){
     else { r.hint.textContent = v && S.proj.length && !S.proj.some(p => p.k === key(v)) ? '프로젝트 목록에 없는 이름이에요. 맞는지 확인해 주세요.' : ''; r.hint.className = 'hint w'; }
   });
   const l1 = $('#qLab1'); l1.hidden = !n; l1.textContent = (kind === 'proj' ? clean(F.proj.value) : clean(F.pn.value).toUpperCase()) || '1번';
-  $('#qSame').hidden = !n;
+  $('#qSameBox').hidden = !n;
 }
 // 사진 → 추가한 빈 칸 채우기. 공통 칸(프로젝트 또는 품번, 귀책)은 비어 있을 때만 채움
 function fillTarget(t, r, t0){
@@ -1481,7 +1499,7 @@ async function copyText(t){
 }
 $('#bCopy').addEventListener('click', async () => { refresh(); const t = $('#out').textContent; recordCopy(); toast(await copyText(t) ? '복사했어요' : '복사하지 못했어요. 길게 눌러 복사해 주세요'); });
 // 품번을 직접 고르거나 고치면: 비어 있는 프로젝트·귀책을 이전 기록으로 채움
-F.pn.addEventListener('change', () => { const u = applyLearn({ proj:false, ven:false }); if (u.length) refresh(); });
+F.pn.addEventListener('change', () => { const f = fixPn(F.pn.value), fx = f !== F.pn.value; if (fx) F.pn.value = f; const u = applyLearn({ proj:false, ven:false }); if (fx || u.length) refresh(); });
 
 refresh();
 loadAll().then(() => { srcProj = srcPn = srcVen = null; refresh(); });

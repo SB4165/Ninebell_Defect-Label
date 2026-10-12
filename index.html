@@ -218,6 +218,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
       <div class="f">
         <label for="iVen"><span class="no">5</span>귀책 <span class="tag" id="tVen"></span></label>
         <div class="combo"><input id="iVen" autocomplete="off" placeholder="입력 필요 · 초성 검색 가능 (예: ㅇㅍ)"><div class="dd" id="dVen"></div></div>
+        <div class="qpn" id="qVen"></div>
         <div class="hint" id="hVen"></div>
         <div class="ask"><button class="btn sm askb" id="bAsk" type="button">확인요청</button><span class="mut">귀책 확인이 필요한 경우 클릭</span></div>
       </div>
@@ -285,7 +286,8 @@ const CONFIG = {
   PROJ:  { names: y=>[`참조(${y})`,`참조 (${y})`], gid: '664632288', range: 'L1:M5000', merge: true },  // 프로젝트 발주명, 올해+작년 합침
   PARTS: { gid: '1577658176', range: 'A:L' },   // 품명/품번 시트: 품번·품명·발견자(요청자). 행 수 제한 없이 끝까지 읽음 (2026-10 기준 약 7.8만 행)
   // 라벨에 적힌 업체 이름 → 시트(귀책 목록)에 있는 이름. 왼쪽은 (주)·㈜·주식회사·공백·점을 뺀 글자로 적기
-  ASK_VENDOR: '확인요청',   // 귀책을 모를 때 [확인요청] 버튼을 누르면 귀책 칸에 들어가는 글자
+  ASK_VENDOR: '확인요청',
+  QUICK_VEN: ['제조1팀', '제조2팀', '전장'],   // 귀책 칸 아래 바로 선택 버튼 (누르면 귀책 칸에 그대로 들어감)   // 귀책을 모를 때 [확인요청] 버튼을 누르면 귀책 칸에 들어가는 글자
   QUICK_PN: ['EFEM FRAME', 'PROCESS FRAME', 'BUFFER'],   // 품번 바로 선택 버튼 (품질팀 변환기의 품명 빠른 입력과 같은 목록)
   // 서버 주소: 학습기록_AppsScript.gs 를 웹 앱으로 배포한 뒤 그 주소(…/exec)를 넣기.
   //   - 학습 기록: 사람이 확인한 값(발주번호·품번 → 프로젝트·귀책)을 모든 휴대폰이 같이 씀
@@ -1142,7 +1144,8 @@ function refresh(){
   const vn = clean(F.ven.value), hv = $('#hVen');
   const asking = vn === CONFIG.ASK_VENDOR;
   $('#bAsk').classList.toggle('on', asking);
-  if (vn && !asking && S.vendors.length && !S.vendors.some(v => v.name === vn)) { hv.textContent = '귀책 목록에 없는 이름이에요.'; hv.className = 'hint w'; }
+  document.querySelectorAll('#qVen [data-qven]').forEach(b => b.classList.toggle('on', b.dataset.qven === vn));
+  if (vn && !asking && !CONFIG.QUICK_VEN.includes(vn) && S.vendors.length && !S.vendors.some(v => v.name === vn)) { hv.textContent = '귀책 목록에 없는 이름이에요.'; hv.className = 'hint w'; }
   else { hv.textContent = ''; hv.className = 'hint'; }
   const rq = clean(F.req.value), hr = $('#hReq');
   if (rq && S.finders.length && !S.finders.includes(rq)) { hr.textContent = '명단에 없는 이름이에요.'; hr.className = 'hint w'; }
@@ -1205,6 +1208,12 @@ function showProjAlt(list){
     + [clean(F.proj.value), ...list].filter(Boolean).map(v => `<button class="chip" type="button" data-v="${esc(v)}">${esc(v)}</button>`).join('') : '';
 }
 // 귀책 확인요청: 누르면 귀책 칸에 '확인요청', 다시 누르면 지움
+// 귀책 바로 선택 (제조1팀·제조2팀·전장). 같은 버튼을 다시 누르면 지움
+$('#qVen').innerHTML = CONFIG.QUICK_VEN.map(n => `<button class="chip" type="button" data-qven="${esc(n)}">${esc(n)}</button>`).join('');
+$('#qVen').addEventListener('click', e => {
+  const b = e.target.closest('[data-qven]'); if (!b) return;
+  setField('ven', clean(F.ven.value) === b.dataset.qven ? '' : b.dataset.qven); refresh();
+});
 $('#bAsk').addEventListener('click', () => {
   const on = clean(F.ven.value) === CONFIG.ASK_VENDOR;
   setField('ven', on ? '' : CONFIG.ASK_VENDOR); refresh();

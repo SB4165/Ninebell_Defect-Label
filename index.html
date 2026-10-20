@@ -89,7 +89,12 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .cam{position:fixed;inset:0;z-index:70;background:#000;display:flex;flex-direction:column}
 .cam[hidden],.cam .cmsg[hidden]{display:none}
 .ask[hidden]{display:none}
-.cam video{flex:1;min-height:0;width:100%;object-fit:contain;background:#000}
+.cam .vw{flex:1;min-height:0;position:relative;overflow:hidden;background:#000;touch-action:none}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;transform-origin:50% 50%}
+.cam .zbar{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:center;gap:10px;pointer-events:none}
+.cam .zbar[hidden]{display:none}
+.cam .zb{pointer-events:auto;font:inherit;font-size:13px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);border-radius:999px;min-width:46px;height:36px;padding:0 10px;cursor:pointer}
+.cam .zb.on{color:#000;background:#ffd33d;border-color:#ffd33d}
 .cam .ctop{position:absolute;top:0;left:0;right:0;padding:max(12px,env(safe-area-inset-top)) 16px 12px;color:#fff;font-size:13px;text-align:center;background:linear-gradient(rgba(0,0,0,.55),transparent);pointer-events:none}
 .cam .cbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px max(18px,env(safe-area-inset-bottom));background:#000}
 .cam .cbtn{font:inherit;font-size:15px;color:#fff;background:none;border:0;padding:10px 6px;min-width:64px;cursor:pointer}
@@ -266,7 +271,10 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
   </section>
 </main>
 <div class="cam" id="cam" hidden>
-  <video id="camV" playsinline muted autoplay></video>
+  <div class="vw" id="camVw">
+    <video id="camV" playsinline muted autoplay></video>
+    <div class="zbar" id="camZ" hidden></div>
+  </div>
   <div class="ctop">라벨(QR 포함)이 화면에 크게 들어오게 찍어 주세요</div>
   <div class="cmsg" id="camMsg">카메라 켜는 중…</div>
   <div class="cbar">
@@ -1261,7 +1269,65 @@ async function onFile(file){
  * 휴대폰 카메라 앱으로 넘어가면, 메모리가 적은 폰(갤럭시 등)은 그 사이 브라우저 페이지를 정리해 버려서
  * 찍고 돌아왔을 때 페이지가 새로 열리고 사진이 사라짐 → 이 화면 안에서 카메라를 켜서 찍음.
  * 카메라를 못 켜면(권한 거부·미지원) 예전처럼 카메라 앱으로. */
-const CAM = { stream:null, track:null, torch:false };
+const CAM = { stream:null, track:null, torch:false, z:1, zr:null, hw:false };
+/* 배율: 카메라가 확대를 지원하면(안드로이드 대부분) 실제 카메라 확대, 아니면(아이폰 사파리 등) 화면 확대 + 찍을 때 가운데만 잘라 씀 */
+const ZOOM_SW = 3;   // 화면 확대 최대 배율
+function zoomInit(){
+  const cap = CAM.track.getCapabilities ? CAM.track.getCapabilities() : {};
+  const zc = cap.zoom && cap.zoom.max > cap.zoom.min ? cap.zoom : null;
+  CAM.hw = !!zc; CAM.zr = zc ? { min:Math.max(zc.min, 1), max:Math.min(zc.max, 10), step:zc.step || 0.1 } : { min:1, max:ZOOM_SW, step:0.1 };
+  const cur = zc && CAM.track.getSettings ? (CAM.track.getSettings().zoom || CAM.zr.min) : 1;
+  CAM.z = Math.max(CAM.zr.min, cur);
+  const bar = $('#camZ'); bar.innerHTML = '';
+  [1, 2, 3, 5].filter(v => v >= CAM.zr.min && v <= CAM.zr.max).forEach(v => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'zb'; b.dataset.z = v; b.textContent = v + '×';
+    b.addEventListener('click', () => setZoom(v)); bar.appendChild(b);
+  });
+  bar.hidden = bar.children.length < 2;
+  setZoom(CAM.z, true);
+}
+let zoomBusy = false, zoomNext = null;
+async function setZoom(v, now){
+  const r = CAM.zr; if (!r) return;
+  v = Math.min(r.max, Math.max(r.min, Math.round(v / r.step) * r.step));
+  CAM.z = v;
+  const bs = [...$('#camZ').children];
+  bs.forEach(b => b.classList.toggle('on', Math.abs(+b.dataset.z - v) < 0.05));
+  const near = bs.find(b => b.classList.contains('on')); if (!near && bs.length) {   // 손가락 확대 중: 가장 가까운 아래 버튼에 현재 배율 표시
+    bs.forEach(b => b.textContent = b.dataset.z + '×');
+    const lo = bs.filter(b => +b.dataset.z <= v).at(-1); if (lo) { lo.classList.add('on'); lo.textContent = v.toFixed(1) + '×'; }
+  } else bs.forEach(b => b.textContent = b.dataset.z + '×');
+  if (!CAM.hw) { $('#camV').style.transform = v > 1 ? `scale(${v})` : ''; return; }
+  if (zoomBusy) { zoomNext = v; return; }   // 실제 카메라 확대는 하나씩 차례로
+  zoomBusy = true;
+  try { await CAM.track.applyConstraints({ advanced:[{ zoom:v }] }); }
+  catch(e) { CAM.hw = false; CAM.zr = { min:1, max:ZOOM_SW, step:0.1 }; $('#camV').style.transform = v > 1 ? `scale(${Math.min(v, ZOOM_SW)})` : ''; }   // 실패하면 화면 확대로
+  zoomBusy = false;
+  if (zoomNext != null) { const n = zoomNext; zoomNext = null; setZoom(n); }
+}
+// 두 손가락으로 벌리기/오므리기
+(() => {
+  let d0 = 0, z0 = 1;
+  const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  const vw = () => $('#camVw');
+  document.addEventListener('touchstart', e => { if (e.touches.length === 2 && vw().contains(e.target) && CAM.zr) { d0 = dist(e.touches); z0 = CAM.z; } }, { passive:true });
+  document.addEventListener('touchmove', e => { if (d0 && e.touches.length === 2) { e.preventDefault(); setZoom(z0 * dist(e.touches) / d0); } }, { passive:false });
+  document.addEventListener('touchend', e => { if (e.touches.length < 2) d0 = 0; }, { passive:true });
+})();
+// 화면 확대로 찍었으면 가운데만 잘라서 (화면에 보이던 그대로)
+async function cropZoom(blob){
+  if (CAM.hw || CAM.z <= 1.01 || !blob) return blob;
+  const bmp = await createImageBitmap(blob), z = CAM.z, v = $('#camV'), vw = $('#camVw');
+  // 화면에 보이는 부분 = 화면 칸 크기 ÷ (확대된 영상 크기). 세로 화면에서는 가로만 잘리고 세로는 더 보일 수 있음
+  const EW = vw.clientWidth, EH = vw.clientHeight, ar = (v.videoWidth || bmp.width) / (v.videoHeight || bmp.height);
+  const dw = Math.min(EW, EH * ar), dh = dw / ar;   // object-fit:contain 으로 그려진 영상 크기
+  const fx = Math.min(1, EW / (dw * z)), fy = Math.min(1, EH / (dh * z));
+  const w = Math.round(bmp.width * fx), h = Math.round(bmp.height * fy);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(bmp, (bmp.width - w) / 2, (bmp.height - h) / 2, w, h, 0, 0, w, h);
+  bmp.close && bmp.close();
+  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+}
 const warmTools = () => { for (let i=0;i<PAR;i++) ocrWorker(i).catch(()=>{}); zx().catch(()=>{}); };
 async function openCam(){
   if (!navigator.mediaDevices?.getUserMedia) return externalCam();
@@ -1270,7 +1336,7 @@ async function openCam(){
   history.pushState({ cam:1 }, '');   // 휴대폰 '뒤로' 버튼으로 닫기
   try {
     CAM.stream = await navigator.mediaDevices.getUserMedia({ audio:false,
-      video: { facingMode:{ ideal:'environment' }, width:{ ideal:4096 }, height:{ ideal:3072 } } });
+      video: { facingMode:{ ideal:'environment' }, width:{ ideal:4096 }, height:{ ideal:3072 }, zoom:true } });   // zoom:true → 크롬에서 확대 기능 사용
   } catch(e) {
     closeCam(true);
     toast(e.name === 'NotAllowedError' ? '카메라 권한이 없어 휴대폰 카메라로 찍어요' : '카메라를 켜지 못해 휴대폰 카메라로 찍어요', 3000);
@@ -1281,12 +1347,13 @@ async function openCam(){
   try { await CAM.track.applyConstraints({ advanced:[{ focusMode:'continuous' }] }); } catch(e) {}
   const cap = CAM.track.getCapabilities ? CAM.track.getCapabilities() : {};
   if (cap.torch) $('#camTorch').style.visibility = 'visible';
+  try { zoomInit(); } catch(e) { $('#camZ').hidden = true; }
   const v = $('#camV'); v.srcObject = CAM.stream;
   try { await v.play(); } catch(e) {}
   msg.hidden = true; shot.disabled = false;
   warmTools();
 }
-function stopStream(){ if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = CAM.track = null; CAM.torch = false; $('#camTorch').classList.remove('on'); $('#camV').srcObject = null; }
+function stopStream(){ if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = CAM.track = null; CAM.torch = false; CAM.z = 1; CAM.zr = null; CAM.hw = false; $('#camV').style.transform = ''; $('#camZ').hidden = true; $('#camTorch').classList.remove('on'); $('#camV').srcObject = null; }
 function closeCam(fromPop){
   stopStream(); $('#cam').hidden = true;
   if (!fromPop && history.state && history.state.cam) history.back();
@@ -1299,12 +1366,12 @@ async function grabPhoto(){
     try {
       const ic = new ImageCapture(CAM.track);
       const blob = await Promise.race([ic.takePhoto(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))]);
-      if (blob && blob.size > 50000) return blob;
+      if (blob && blob.size > 50000) return await cropZoom(blob);
     } catch(e) {}
   }
   const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
   c.getContext('2d').drawImage(v, 0, 0);
-  return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+  return await cropZoom(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)));
 }
 $('#camShot').addEventListener('click', async () => {
   const shot = $('#camShot'); if (shot.disabled) return; shot.disabled = true;

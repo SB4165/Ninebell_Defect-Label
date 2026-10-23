@@ -85,6 +85,9 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .pick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .pick .btn{padding:12px 10px;font-size:15px}
 .shot{display:none;margin-top:12px;gap:12px;align-items:flex-start}
+.retake{margin-top:8px;padding:8px 10px;border:1px solid #d4a72c;background:#fff8c5;color:#4d2d00;border-radius:6px;font-size:13px;line-height:1.45;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.retake[hidden]{display:none}
+.retake .btn{flex:none}
 /* 화면 안 카메라 (카메라 앱으로 넘어가지 않음 → 갤럭시에서 페이지가 새로 열리며 사진이 사라지는 문제 방지) */
 .cam{position:fixed;inset:0;z-index:70;background:#000;display:flex;flex-direction:column}
 .cam[hidden],.cam .cmsg[hidden]{display:none}
@@ -96,6 +99,8 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .cam .zb{pointer-events:auto;font:inherit;font-size:13px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.35);border-radius:999px;min-width:46px;height:36px;padding:0 10px;cursor:pointer}
 .cam .zb.on{color:#000;background:#ffd33d;border-color:#ffd33d}
 .cam .ctop{position:absolute;top:0;left:0;right:0;padding:max(12px,env(safe-area-inset-top)) 16px 12px;color:#fff;font-size:13px;text-align:center;background:linear-gradient(rgba(0,0,0,.55),transparent);pointer-events:none}
+.cam .ctop.ok{background:linear-gradient(rgba(26,127,55,.92),rgba(26,127,55,.6));font-weight:700}
+.cam .vw.ok::after{content:"";position:absolute;inset:0;border:4px solid #2da44e;pointer-events:none}
 .cam .cbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px max(18px,env(safe-area-inset-bottom));background:#000}
 .cam .cbtn{font:inherit;font-size:15px;color:#fff;background:none;border:0;padding:10px 6px;min-width:64px;cursor:pointer}
 .cam .cbtn.on{color:#ffd33d;font-weight:700}
@@ -183,6 +188,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
           <div class="t" id="pT">읽는 중…</div>
           <div class="bar"><i id="pB"></i></div>
           <div class="mut" id="pM"></div>
+          <div class="retake" id="retake" hidden><span id="rtT"></span><button class="btn sm" id="bRetake" type="button">다시 찍기</button></div>
         </div>
       </div>
     </div>
@@ -275,7 +281,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
     <video id="camV" playsinline muted autoplay></video>
     <div class="zbar" id="camZ" hidden></div>
   </div>
-  <div class="ctop">라벨(QR 포함)이 화면에 크게 들어오게 찍어 주세요</div>
+  <div class="ctop" id="camTop">라벨(QR 포함)이 화면에 크게 들어오게 찍어 주세요</div>
   <div class="cmsg" id="camMsg">카메라 켜는 중…</div>
   <div class="cbar">
     <button class="cbtn" id="camX" type="button">취소</button>
@@ -701,9 +707,22 @@ function ocrWorker(i = 0){
 }
 
 /* ================== QR / 바코드 ================== */
-async function readCodes(img){
+async function readCodes(img, hint){
   const Z = await zx();
-  const W = img.naturalWidth || img.width;
+  const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+  // ④ 카메라 화면에서 이미 QR 위치를 알면 그 둘레만 먼저 읽음 (사진 전체보다 훨씬 빠름)
+  if (hint && hint.nside) {
+    const side = hint.nside * W, half = 2.5 * side;
+    const x0 = Math.max(0, hint.nx * W - half), y0 = Math.max(0, hint.ny * H - half);
+    const x1 = Math.min(W, hint.nx * W + half), y1 = Math.min(H, hint.ny * H + half);
+    if (x1 - x0 > 20 && y1 - y0 > 20) {
+      const cv = prep(img, { crop:{ x:x0/W, y:y0/H, w:(x1-x0)/W, h:(y1-y0)/H }, scale:Math.min(1.5, 260 / side), maxDim:1600, gray:false });
+      const s = cv._s, id = cv.getContext('2d').getImageData(0,0,cv.width,cv.height);
+      let res = []; try { res = await Z.readBarcodes(id, { tryHarder:true, maxNumberOfSymbols:3, formats:['QRCode','DataMatrix','Code128'] }); } catch(e) {}
+      const hit = res.filter(r => r.isValid && r.text && (r.text === hint.text || codePart(r.text)));
+      if (hit.length) return hit.map(r => { r.geo = codeGeoAt(r, s, x0, y0); return r; });
+    }
+  }
   const tries = [ { maxDim:1600, gray:false }, { maxDim:2400, minDim:1400, gray:true }, { maxDim:2400, minDim:2400, gray:false } ];
   const all = [], seen = new Set();
   for (const t of tries) {
@@ -717,6 +736,10 @@ async function readCodes(img){
   }
   return all;
 }
+// 품번 모양의 코드 (목록에 없어도 품번으로 씀)
+const pnLike = t => /^[A-Z0-9]{2,}(-[A-Z0-9_]+){1,4}$/i.test(clean(t)) && /\d/.test(t) && !/^PUR|^PDI/i.test(t);
+// 코드 → 품번 { pn, name, known } (목록에 있으면 known)
+const codeHit = t => { const h = codePart(t); return h ? { pn:h.pn, name:h.name, known:true } : pnLike(t) ? { pn:clean(t).toUpperCase(), name:'', known:false } : null; };
 const codePart = t => S.parts.get(key(t)) || (IX.pn.get(normC(t)) || []).map(j => IX.list[j].p)[0];
 // QR 네 모서리 → 원본 사진에서의 중심·한 변 길이·기울기(라디안)
 function codeGeo(r, sc){
@@ -726,6 +749,11 @@ function codeGeo(r, sc){
   const cx = (tl[0]+tr[0]+bl[0]+br[0])/4, cy = (tl[1]+tr[1]+bl[1]+br[1])/4;
   const side = (Math.hypot(tr[0]-tl[0], tr[1]-tl[1]) + Math.hypot(bl[0]-tl[0], bl[1]-tl[1])) / 2;
   return { cx, cy, side, ang: Math.atan2(tr[1]-tl[1], tr[0]-tl[0]) };
+}
+// 잘라 낸 그림(배율 s, 왼쪽 위 x0,y0)에서 찾은 QR → 원본 사진 좌표
+function codeGeoAt(r, s, x0, y0){
+  const g = codeGeo(r, s); if (!g) return null;
+  return { ...g, cx:g.cx + x0, cy:g.cy + y0 };
 }
 // QR 기울기 → 90도 단위 방향 (도면 표제란 등 기존 처리용)
 function rotFromCode(r){
@@ -951,7 +979,7 @@ function analyze(text, conf){
    1) QR/바코드 → 품번, 그리고 QR 위치·기울기로 라벨만 잘라 똑바로 편 뒤 글자 읽기
    2) QR이 없으면 → 네 방향으로 빠르게 읽어 방향을 찾고, 글자가 모인 곳만 잘라 크게 다시 읽기
    3) 그래도 품번이 없으면(도면 등) → 오른쪽 아래 표제란 확대, 흐림 보정 */
-async function recognize(file){
+async function recognize(file, hint, job = {}){
   const img = await loadImg(file);
   $('#thumb').src = img.src;
   const out = { pn:null, cands:[], proj:null, qty:'', ven:null, drawing:false, via:'', ms:{} };
@@ -962,17 +990,19 @@ async function recognize(file){
   step('QR 읽는 중…', 5);
   let rot = null, anchor = null;
   try {
-    const codes = await readCodes(img);
+    hint = fitHint(hint, img.naturalWidth || img.width, img.naturalHeight || img.height);
+    if (hint && hint.part) { out.pn = { ...hint.part }; out.via = 'QR'; job.ok = true; }   // 카메라 화면에서 이미 읽음
+    const codes = await readCodes(img, hint);
     for (const c of codes) {
       const hit = codePart(c.text);
       if (hit) { out.pn = { pn:hit.pn, name:hit.name, known:true }; anchor = c; break; }
     }
-    if (!out.pn) { const c = codes.find(c => /^[A-Z0-9]{2,}(-[A-Z0-9_]+){1,4}$/i.test(clean(c.text)) && /\d/.test(c.text) && !/^PUR|^PDI/i.test(c.text));
-      if (c) { out.pn = { pn:clean(c.text).toUpperCase(), name:'', known:false }; anchor = c; } }
+    if (!anchor) { const c = codes.find(c => pnLike(c.text));
+      if (c) { if (!out.pn?.known) out.pn = { pn:clean(c.text).toUpperCase(), name:'', known:false }; anchor = c; } }
     anchor ||= codes.filter(c => c.geo).sort((a,b) => b.geo.side - a.geo.side)[0] || null;
     if (anchor && !anchor.geo) anchor = null;
     if (anchor) rot = rotFromCode(anchor);
-    if (out.pn) out.via = 'QR';
+    if (out.pn) { out.via = 'QR'; job.ok = true; }
     out.codes = codes.map(c => c.text);
   } catch(e) { console.warn('QR', e); }
   lap('qr');
@@ -987,7 +1017,9 @@ async function recognize(file){
     const t0 = performance.now(), d = (await w.recognize(cv, {}, blocks ? { blocks:true } : {})).data;
     d._ms = Math.round(performance.now() - t0); d._wh = cv.width + 'x' + cv.height; return d;
   };
-  const keep = (data, opt) => { const r = analyze(data.text, data.confidence); r.opt = { ...opt, ms:data._ms, wh:data._wh }; passes.push(r); return r; };
+  const keep = (data, opt) => { const r = analyze(data.text, data.confidence); r.opt = { ...opt, ms:data._ms, wh:data._wh }; passes.push(r);
+    if (r.parts.length || r.proj || r.ven || r.qty) job.ok = true;   // 뭔가 읽음 → 다시 찍기 안내 안 함
+    return r; };
   const run = async (label, opt, pct) => { step(label, pct); return keep(await read(prep(img, opt), opt.psm || '6'), opt); };
   const gotPart = () => out.pn || passes.some(p => p.parts[0]?.exact);
   const any = () => gotPart() || passes.some(p => p.parts.length || p.proj || p.ven || p.raw);
@@ -1230,8 +1262,32 @@ $('#bAsk').addEventListener('click', () => {
 $('#cProj').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; F.proj.value = b.dataset.v; auto.proj=''; tag('#tProj','',''); showProjAlt([]); refresh(); });
 $('#cPn').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; F.pn.value = b.dataset.pn; auto.pn=''; tag('#tPn','',''); showCands([]); applyLearn({ proj:false, ven:false }); refresh(); });
 
-async function onFile(file){
+/* 다시 찍기 안내: 찍은 지 5초(인식 도구 내려받는 시간 제외)가 지났는데 QR도 못 찾고 읽은 글자도 없으면.
+ * 안내가 떠도 인식은 계속하고, 뭔가 읽히면 안내를 지움 */
+const RETAKE_MS = 5000;
+let RUN = null;
+function showRetake(t){ $('#rtT').textContent = t; $('#retake').hidden = false; }
+function hideRetake(){ $('#retake').hidden = true; }
+$('#bRetake').addEventListener('click', () => {
+  const r = RUN;
+  if (r && !r.done) {   // 인식 중이면 멈춤: 글자 인식은 중간에 못 멈춰서 인식기를 끄고 새로 켬
+    r.cancel = true; r.done = true; clearInterval(r.tick); onOcrProg = null;
+    for (let i=0;i<workerP.length;i++) { const p = workerP[i]; workerP[i] = null; p && p.then(w => w.terminate()).catch(()=>{}); }
+    $('#bCam').disabled = $('#bAlb').disabled = false;
+  }
+  hideRetake(); step('다시 찍어 주세요', 0); $('#pM').textContent = '';
+  openCam();
+});
+async function onFile(file, hint){
   if (!file) return;
+  if (RUN && !RUN.done) { RUN.cancel = true; RUN.done = true; clearInterval(RUN.tick); }
+  const run = RUN = { ok:false, dl:false, done:false, cancel:false, el:0 };
+  hideRetake();
+  run.tick = setInterval(() => {
+    if (run.done || run.ok) return clearInterval(run.tick);
+    if (!run.dl) run.el += 250;
+    if (run.el >= RETAKE_MS) { clearInterval(run.tick); showRetake('라벨이 잘 안 보여요. 라벨을 화면에 크게, 흔들리지 않게 다시 찍어 주세요.'); }
+  }, 250);
   $('#shot').style.display = 'flex'; $('#pM').textContent = ''; step('사진 여는 중…', 2);
   // [+ 추가]로 만든 빈 칸이 있으면 이 사진은 그 칸을 채움 (첫 건은 그대로 둠)
   const target = MULTI.rows.find(r => !clean(r.inp.value)) || null;
@@ -1239,9 +1295,12 @@ async function onFile(file){
   refresh();
   $('#bCam').disabled = $('#bAlb').disabled = true;
   const t0 = performance.now();
-  onOcrProg = m => { if (m.status === 'loading language traineddata' && m.progress < 1) $('#pM').textContent = '인식 도구 내려받는 중 ' + Math.round(m.progress*100) + '%'; };
+  onOcrProg = m => { run.dl = /^loading/.test(m.status) && m.progress < 1;   // 내려받는 시간은 5초에 안 넣음
+    if (m.status === 'loading language traineddata' && m.progress < 1) $('#pM').textContent = '인식 도구 내려받는 중 ' + Math.round(m.progress*100) + '%'; };
   try {
-    const r = await recognize(file);
+    const r = await recognize(file, hint, run);
+    if (run.cancel) return;
+    run.done = true; hideRetake();
     window.__last = r;
     if (target && MULTI.rows.includes(target)) { fillTarget(target, r, t0); return; }
     if (r.pn) setField('pn', r.pn.pn, r.pn.check || !r.pn.known ? 'chk' : 'auto', r.via === 'QR' ? (r.pn.known ? 'QR 인식' : 'QR · 목록에 없음') : (!r.pn.known ? '목록에 없음 · 확인 필요' : r.pn.check ? '확인 필요' : '자동 인식'));
@@ -1254,15 +1313,19 @@ async function onFile(file){
     Object.assign(ctx, { pur:r.pur || '', a:{ proj:r.proj?.name || '', pn:r.pn?.pn || '', ven:r.ven?.name || '', qty:r.qty || '' }, sent:'' });
     applyLearn({ proj: !r.proj || r.proj.check, ven: !r.ven || r.ven.s < 1 });
     const got = [r.proj && '프로젝트', r.pn && '품번', r.qty && '수량', r.ven && '귀책'].filter(Boolean);
-    step(got.length ? '인식 완료' : '읽은 내용이 없어요. 직접 입력해 주세요.', 100);
+    step(got.length ? '인식 완료' : '읽은 내용이 없어요. 다시 찍거나 직접 입력해 주세요.', 100);
+    if (!got.length && !r.drawing) showRetake('라벨을 화면에 크게, 흔들리지 않게 다시 찍어 주세요.');
     $('#pM').textContent = (r.drawing ? '도면 사진 · ' : '') + (got.length ? got.join(', ') + ' 채움' : '') + ` · ${((performance.now()-t0)/1000).toFixed(1)}초`
       + (r.drawing ? ' · 도면에는 프로젝트·수량·귀책이 없어 직접 입력해 주세요' : '');
     refresh();
     if (!clean(F.txt.value)) F.txt.focus({ preventScroll:true });
   } catch(e) {
+    if (run.cancel) return;
+    run.done = true; hideRetake();
     console.error(e); step('인식 실패: ' + (e.message || e), 100); $('#pM').textContent = '인터넷 연결을 확인하거나 직접 입력해 주세요.';
   } finally {
-    $('#bCam').disabled = $('#bAlb').disabled = false; onOcrProg = null;
+    run.done = true; clearInterval(run.tick);
+    if (RUN === run && !run.cancel) { $('#bCam').disabled = $('#bAlb').disabled = false; onOcrProg = null; }
   }
 }
 /* ================== 사진 찍기: 화면 안 카메라 ==================
@@ -1314,19 +1377,76 @@ async function setZoom(v, now){
   document.addEventListener('touchmove', e => { if (d0 && e.touches.length === 2) { e.preventDefault(); setZoom(z0 * dist(e.touches) / d0); } }, { passive:false });
   document.addEventListener('touchend', e => { if (e.touches.length < 2) d0 = 0; }, { passive:true });
 })();
-// 화면 확대로 찍었으면 가운데만 잘라서 (화면에 보이던 그대로)
-async function cropZoom(blob){
-  if (CAM.hw || CAM.z <= 1.01 || !blob) return blob;
-  const bmp = await createImageBitmap(blob), z = CAM.z, v = $('#camV'), vw = $('#camVw');
-  // 화면에 보이는 부분 = 화면 칸 크기 ÷ (확대된 영상 크기). 세로 화면에서는 가로만 잘리고 세로는 더 보일 수 있음
-  const EW = vw.clientWidth, EH = vw.clientHeight, ar = (v.videoWidth || bmp.width) / (v.videoHeight || bmp.height);
+// 찍은 사진 마무리: 화면 확대로 찍었으면 화면에 보이던 부분만 자르고(②), 긴 변을 SHOT_MAX 이하로 줄임(⑥)
+//   휴대폰 원본(1,200만~5,000만 화소)은 여는 데만 오래 걸리고 메모리도 많이 씀. 라벨만 잘라 읽으므로 3000px이면 충분
+const SHOT_MAX = 3000;
+function zoomView(bw, bh){   // 화면에 보이는 부분 비율 = 화면 칸 크기 ÷ 확대된 영상 크기 (세로 화면에서는 가로만 잘리고 세로는 더 보일 수 있음)
+  if (CAM.hw || CAM.z <= 1.01) return { fx:1, fy:1 };
+  const v = $('#camV'), vw = $('#camVw'), z = CAM.z;
+  const EW = vw.clientWidth, EH = vw.clientHeight, ar = (v.videoWidth || bw) / (v.videoHeight || bh);
   const dw = Math.min(EW, EH * ar), dh = dw / ar;   // object-fit:contain 으로 그려진 영상 크기
-  const fx = Math.min(1, EW / (dw * z)), fy = Math.min(1, EH / (dh * z));
-  const w = Math.round(bmp.width * fx), h = Math.round(bmp.height * fy);
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  c.getContext('2d').drawImage(bmp, (bmp.width - w) / 2, (bmp.height - h) / 2, w, h, 0, 0, w, h);
-  bmp.close && bmp.close();
+  return { fx:Math.min(1, EW / (dw * z)), fy:Math.min(1, EH / (dh * z)) };
+}
+async function finishShot(src){   // src: Blob 또는 video
+  const isV = !(src instanceof Blob);
+  const bmp = isV ? src : await createImageBitmap(src);
+  const bw = isV ? src.videoWidth : bmp.width, bh = isV ? src.videoHeight : bmp.height;
+  const { fx, fy } = zoomView(bw, bh);
+  const w = Math.round(bw * fx), h = Math.round(bh * fy), k = Math.min(1, SHOT_MAX / Math.max(w, h));
+  if (!isV && fx === 1 && fy === 1 && k === 1) { bmp.close && bmp.close(); return src; }
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+  x.drawImage(bmp, (bw - w) / 2, (bh - h) / 2, w, h, 0, 0, c.width, c.height);
+  if (!isV) bmp.close && bmp.close();
   return await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92));
+}
+/* ④ 카메라 화면에서 QR 미리 읽기: 비추는 동안 QR을 계속 찾아서, 찾으면 위쪽 안내를 초록으로 바꾸고
+ * 찍을 때 품번과 QR 위치를 넘겨줌 → 찍은 뒤 QR을 사진 전체에서 다시 찾지 않아도 됨 */
+const LIVE = { timer:null, busy:false, hit:null, at:0 };
+const LIVE_MS = 300, LIVE_DIM = 960, LIVE_KEEP = 1500;   // 몇 ms마다, 몇 px로 줄여서, 마지막으로 본 뒤 몇 ms까지 유효
+function liveStart(){
+  liveStop();
+  LIVE.timer = setInterval(liveTick, LIVE_MS);
+}
+function liveStop(){ clearInterval(LIVE.timer); LIVE.timer = null; LIVE.hit = null; liveShow(); }
+function liveShow(){
+  const ok = !!LIVE.hit, top = $('#camTop');
+  top.classList.toggle('ok', ok); $('#camVw').classList.toggle('ok', ok);
+  top.textContent = ok ? `QR 확인됨 · ${LIVE.hit.part.pn} · 이대로 찍으세요` : '라벨(QR 포함)이 화면에 크게 들어오게 찍어 주세요';
+}
+async function liveTick(){
+  const v = $('#camV');
+  if (LIVE.busy || !CAM.track || !v.videoWidth || document.hidden) return;
+  LIVE.busy = true;
+  try {
+    const Z = await zx();
+    const bw = v.videoWidth, bh = v.videoHeight, { fx, fy } = zoomView(bw, bh);
+    const w = bw * fx, h = bh * fy, k = Math.min(1, LIVE_DIM / Math.max(w, h));
+    const c = liveTick.c ||= document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    const x = c.getContext('2d', { willReadFrequently:true }); x.drawImage(v, (bw - w) / 2, (bh - h) / 2, w, h, 0, 0, c.width, c.height);
+    const res = await Z.readBarcodes(x.getImageData(0, 0, c.width, c.height), { tryHarder:false, maxNumberOfSymbols:3, formats:['QRCode','DataMatrix','Code128'] });
+    let hit = null;
+    for (const r of res) { const part = r.isValid && r.text && codeHit(r.text); if (part && (!hit || part.known)) hit = { r, part }; }   // 목록에 있는 품번 우선
+    if (hit && CAM.track) {
+      const g = codeGeo(hit.r, 1);   // 줄인 화면 좌표
+      LIVE.hit = { text:hit.r.text, part:hit.part, nx:g.cx / c.width, ny:g.cy / c.height, nside:g.side / c.width, va:c.width / c.height };
+      LIVE.at = performance.now();
+    } else if (LIVE.hit && performance.now() - LIVE.at > LIVE_KEEP) LIVE.hit = null;
+    if (CAM.track) liveShow();
+  } catch(e) {}
+  LIVE.busy = false;
+}
+// 찍을 때 넘길 QR 정보 (방금 본 것만). 화면 영상과 찍은 사진의 가로세로 비율이 다르면 위치를 맞춰 줌
+function liveHint(){
+  const h = LIVE.hit; if (!h || performance.now() - LIVE.at > LIVE_KEEP) return null;
+  return { ...h };
+}
+function fitHint(h, pw, ph){
+  if (!h) return null;
+  const pa = pw / ph, o = { ...h };
+  if (h.va > pa * 1.03) { o.ny = 0.5 + (h.ny - 0.5) * (pa / h.va); }                       // 영상이 더 넓음 = 사진의 위아래가 잘린 영상
+  else if (h.va < pa / 1.03) { o.nx = 0.5 + (h.nx - 0.5) * (h.va / pa); o.nside = h.nside * (h.va / pa); }   // 영상이 더 좁음 = 사진의 좌우가 잘린 영상
+  return o;
 }
 const warmTools = () => { for (let i=0;i<PAR;i++) ocrWorker(i).catch(()=>{}); zx().catch(()=>{}); };
 async function openCam(){
@@ -1351,9 +1471,9 @@ async function openCam(){
   const v = $('#camV'); v.srcObject = CAM.stream;
   try { await v.play(); } catch(e) {}
   msg.hidden = true; shot.disabled = false;
-  warmTools();
+  warmTools(); liveStart();
 }
-function stopStream(){ if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = CAM.track = null; CAM.torch = false; CAM.z = 1; CAM.zr = null; CAM.hw = false; $('#camV').style.transform = ''; $('#camZ').hidden = true; $('#camTorch').classList.remove('on'); $('#camV').srcObject = null; }
+function stopStream(){ liveStop(); if (CAM.stream) CAM.stream.getTracks().forEach(t => t.stop()); CAM.stream = CAM.track = null; CAM.torch = false; CAM.z = 1; CAM.zr = null; CAM.hw = false; $('#camV').style.transform = ''; $('#camZ').hidden = true; $('#camTorch').classList.remove('on'); $('#camV').srcObject = null; }
 function closeCam(fromPop){
   stopStream(); $('#cam').hidden = true;
   if (!fromPop && history.state && history.state.cam) history.back();
@@ -1366,19 +1486,18 @@ async function grabPhoto(){
     try {
       const ic = new ImageCapture(CAM.track);
       const blob = await Promise.race([ic.takePhoto(), new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))]);
-      if (blob && blob.size > 50000) return await cropZoom(blob);
+      if (blob && blob.size > 50000) return await finishShot(blob);
     } catch(e) {}
   }
-  const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
-  c.getContext('2d').drawImage(v, 0, 0);
-  return await cropZoom(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)));
+  return await finishShot(v);
 }
 $('#camShot').addEventListener('click', async () => {
   const shot = $('#camShot'); if (shot.disabled) return; shot.disabled = true;
   try {
+    const hint = liveHint();   // 찍기 직전에 본 QR
     const blob = await grabPhoto();
     closeCam();
-    if (blob) onFile(new File([blob], 'camera.jpg', { type: blob.type || 'image/jpeg' }));
+    if (blob) onFile(new File([blob], 'camera.jpg', { type: blob.type || 'image/jpeg' }), hint);
   } catch(e) { shot.disabled = false; toast('사진을 찍지 못했어요. 다시 눌러 주세요'); }
 });
 $('#camX').addEventListener('click', () => closeCam());

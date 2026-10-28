@@ -141,6 +141,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 #qMore .qty{margin-top:6px}
 .qpn .chip{padding:4px 12px;font-weight:600}
 .qpn .chip.on{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
+.qpn .qbr{flex-basis:100%;height:0}
 .ask{display:flex;align-items:center;gap:8px;margin-top:6px}
 .ask>.btn{flex:none}.ask>.mut{flex:1;min-width:0;line-height:1.4}
 .f label:has(.lnote){white-space:nowrap}.lnote{font-weight:400;font-size:12px;white-space:normal;flex:1;min-width:0;line-height:1.4}.nw{white-space:nowrap}
@@ -313,6 +314,7 @@ const CONFIG = {
   SITES: ['성남', '동탄'],   // 사업장 버튼 (메시지 첫 줄)
   QUICK_VEN: ['제조1팀', '제조2팀', '전장'],   // 귀책 칸 아래 바로 선택 버튼 (누르면 귀책 칸에 그대로 들어감)   // 귀책을 모를 때 [확인요청] 버튼을 누르면 귀책 칸에 들어가는 글자
   QUICK_PN: ['EFEM FRAME', 'PROCESS FRAME', 'BUFFER'],   // 품번 바로 선택 버튼 (품질팀 변환기의 품명 빠른 입력과 같은 목록)
+  QUICK_CB: [ { label:'EFEM CB', v:'EFEM CONTROL BOX' }, { label:'PRO 1 CB', v:'PROCESS 1 CONTROL BOX' }, { label:'PRO 2 CB', v:'PROCESS 2 CONTROL BOX' } ],   // 컨트롤 박스 버튼 (둘째 줄). 버튼 글자는 짧게, 품번 칸에는 전체 이름
   // 서버 주소: 학습기록_AppsScript.gs 를 웹 앱으로 배포한 뒤 그 주소(…/exec)를 넣기.
   //   - 학습 기록: 사람이 확인한 값(발주번호·품번 → 프로젝트·귀책)을 모든 휴대폰이 같이 씀
   //   - 개선요청 탭: 요청 목록 저장 (제조팀 전용, 품질팀 변환기와 따로)
@@ -1180,8 +1182,10 @@ function fixPn(v){
   return hit.length === 1 ? hit[0] : v;
 }
 // 품번 바로 선택 (EFEM FRAME 등): 품번이 없는 품목. 같은 버튼을 다시 누르면 지움
-const quickPn = v => { const k = clean(v).toUpperCase(); return CONFIG.QUICK_PN.find(n => n === k) || ''; };
-$('#qPn').innerHTML = CONFIG.QUICK_PN.map(n => `<button class="chip" type="button" data-qpn="${esc(n)}">${esc(n)}</button>`).join('');
+const QUICK_ALL = [...CONFIG.QUICK_PN, ...CONFIG.QUICK_CB.map(c => c.v)];
+const quickPn = v => { const k = clean(v).toUpperCase(); return QUICK_ALL.find(n => n === k) || ''; };
+$('#qPn').innerHTML = CONFIG.QUICK_PN.map(n => `<button class="chip" type="button" data-qpn="${esc(n)}">${esc(n)}</button>`).join('')
+  + '<span class="qbr"></span>' + CONFIG.QUICK_CB.map(c => `<button class="chip" type="button" data-qpn="${esc(c.v)}" title="${esc(c.v)}">${esc(c.label)}</button>`).join('');
 $('#qPn').addEventListener('click', e => {
   const b = e.target.closest('[data-qpn]'); if (!b) return;
   const on = quickPn(F.pn.value) === b.dataset.qpn;

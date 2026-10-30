@@ -149,7 +149,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .isc .dt dt{color:var(--mut)} .isc .dt dd{margin:0;font-variant-numeric:tabular-nums;font-weight:600}
 .isc .dt dd.wait{color:#9a6700}
 @media (max-width:760px){ .isc .nm{font-size:18px} .isc .pn{font-size:15px} .isc .dt{font-size:14px} }
-@media (max-width:480px){ .tabs{padding:10px 8px 0;gap:2px} .tabs button{padding:8px 9px;font-size:13.5px} }
+@media (max-width:480px){ .tabs{padding:10px 6px 0;gap:0} .tabs button{padding:8px 7px;font-size:13px} }
 /* 처리현황 탭 (품질팀 변환기와 같은 모양) */
 .stsearch{max-width:420px}
 .stnote{margin:8px 0 0;font-size:12px}
@@ -178,6 +178,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .sti .t1 .btn{margin-left:auto}
 .sti .who{font-size:12px;color:var(--ok);font-weight:600}
 .sti .nm{font-size:16px;font-weight:700;line-height:1.3;word-break:break-all}
+.sti .spn{font-size:13px;color:var(--fg);margin-top:-3px;word-break:break-all} .sti .spn span{color:var(--mut);font-size:12px;margin-right:6px}
 .sti .df{display:flex;gap:6px;align-items:flex-start;font-size:14px;line-height:1.45}
 .sti .df .tg{flex:0 0 auto;font-size:12px;font-weight:700;padding:1px 8px;border-radius:2em;background:#fff1e5;color:#bc4c00;border:1px solid #ffd8b5;margin-top:1px}
 .sti .mt{font-size:12px;color:var(--mut);word-break:keep-all}
@@ -198,7 +199,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .dd.stdd div{min-height:32px;align-items:center}
 .modal .dd{position:static;margin-top:4px;max-height:162px;box-shadow:none}   /* 이름 고르기 창: 목록이 버튼을 가리지 않게 */
 .modal .whobox{min-height:214px}   /* 목록 자리를 미리 잡아 둠 → 목록이 닫혀도 버튼 위치가 안 바뀜 */
-@media (max-width:760px){ .stlist{grid-template-columns:1fr} .sti .nm{font-size:17px} .sti .df{font-size:15px} }
+@media (max-width:760px){ .stlist{grid-template-columns:1fr} .sti .nm{font-size:17px} .sti .spn{font-size:14px} .sti .df{font-size:15px} }
 .chip:hover{border-color:var(--acc)} .chip.on{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
 .chip small{color:var(--mut);margin-left:4px}
 .qpn{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
@@ -247,7 +248,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 <nav class="tabs" id="tabs">
   <button type="button" class="on" data-tab="main">부적합 처리 요청</button>
   <button type="button" data-tab="stat">처리현황</button>
-  <button type="button" data-tab="insp">수입검사</button>
+  <button type="button" data-tab="insp">수입검사 현황</button>
   <button type="button" data-tab="req">개선요청<span class="badge" id="reqBadge" style="display:none"></span></button>
 </nav>
 <main id="pMain">
@@ -2049,6 +2050,7 @@ function stRender(){
       <div class="t1">${st}${r.act ? `<span class="act">${esc(r.act)}</span>` : ''}${btn}</div>
       ${who ? `<div class="who">${who}</div>` : ''}
       <div class="nm">${esc(r.name || '(품명 없음)')}</div>
+      ${r.pn && r.pn !== '-' ? `<div class="spn"><span>품번</span>${esc(r.pn)}</div>` : ''}
       <div class="df">${r.s ? `<span class="tg">${esc(r.s)}</span>` : ''}<span>${esc(r.text || '')}</span></div>
       <div class="mt">No ${esc(r.no)} · ${esc(r.date || '-')} · 귀책 ${esc(r.vendor || '-')} · 발견 ${esc(r.finder || '-')} · 담당 ${esc(r.owner || '-')}</div>
       ${r.ps ? `<div class="ps">비고 · ${esc(r.ps)}</div>` : ''}</div>`; };

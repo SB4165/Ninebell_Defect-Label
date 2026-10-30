@@ -431,7 +431,8 @@ const CONFIG = {
     ID: '1ebVK2IwTrukOQi-eEwUuR5dcU63d-xLnJO-ObCp3_Do',
     GIDS: ['877923199', '389491743'],
     COLS: { req:'B', proj:'G', pn:'I', name:'J', done:'O', res:'P' },   // 수입검사 요청일 · 프로젝트명 · 품번 · 품명 · 검수완료일 · 검수결과
-    QUICK: ['BUFFER', 'ROBOT LIQUID TRAY'],   // 빠른 검색 (고른 프로젝트 안에서 품명으로 찾음)
+    // 빠른 검색: 고른 프로젝트 안에서 품명(J열)에 any 중 하나라도 들어가면 (대소문자·띄어쓰기 무시). any가 없으면 버튼 글자로 찾음
+    QUICK: [ { label:'BUFFER' }, { label:'ROBOT LIQUID TRAY' }, { label:'END EFFCTOR', any:['EFFCTOR', 'EFFECTOR'] } ],
   },
   SERVER_URL: 'https://script.google.com/macros/s/AKfycbwEUJgtuePCy6R-n8w5Dr9UHD606NkefAEr64lDdC6A4yOx5ZPDUNjpU0rPQUcMhWXI/exec',
   VENDOR_ALIAS: {
@@ -2203,10 +2204,11 @@ $('#isQ').addEventListener('keydown', e => {
 });
 $('#isQ').addEventListener('blur', () => setTimeout(() => $('#isDD').style.display = 'none', 150));
 // 빠른 검색: 고른 프로젝트 안에서 품명(J열)에 그 글자가 들어간 건 (띄어쓰기·대소문자 무시)
-const isHas = (r, q) => key(r.name).includes(key(q));
+const isQuick = label => CONFIG.INSP.QUICK.find(x => x.label === label) || { label };
+const isHas = (r, label) => { const n = key(r.name); return (isQuick(label).any || [label]).some(w => n.includes(key(w))); };
 function inspQuick(){
   const rows = S.is.proj ? (S.is.rows || []).filter(r => r.k === S.is.k) : null;
-  $('#isQuick').innerHTML = '<span class="lb">빠른 검색</span>' + CONFIG.INSP.QUICK.map(q => {
+  $('#isQuick').innerHTML = '<span class="lb">빠른 검색</span>' + CONFIG.INSP.QUICK.map(x => { const q = x.label;
     const n = rows ? rows.filter(r => isHas(r, q)).length : null;
     return `<button type="button" class="chip${S.is.q === q ? ' on' : ''}" data-isq="${esc(q)}">${esc(q)}${n != null ? `<small>${n}건</small>` : ''}</button>`; }).join('');
 }
@@ -2232,7 +2234,7 @@ function inspRender(){
     </div>`;
   box.innerHTML = `<div class="rh"><h3>${esc(S.is.proj)}</h3><span class="mut">수입검사 ${all.length}건</span><button type="button" class="btn sm x" data-isx title="닫기">✕ 닫기</button></div>
     <div class="ism">${chip('*', '전체')}${chip('wait', '검수대기')}${chip('ok', '합격')}${chip('ng', '불합격')}${chip('etc', '기타')}</div>
-    ${S.is.q ? `<div class="isf">품명에 '${esc(S.is.q)}' 들어간 건만 보는 중<button type="button" class="btn sm" data-isqx>전체 보기</button></div>` : ''}
+    ${S.is.q ? `<div class="isf">품명에 ${(isQuick(S.is.q).any || [S.is.q]).map(w => `'${esc(w)}'`).join(' 또는 ')} 들어간 건만 보는 중<button type="button" class="btn sm" data-isqx>전체 보기</button></div>` : ''}
     ${shown.length ? `<div class="stlist">${shown.map(card).join('')}</div>` : `<p class="mut">${S.is.q ? `이 프로젝트에 품명이 '${esc(S.is.q)}'인 수입검사 건이 없어요.` : '해당하는 건이 없어요.'}</p>`}`;
 }
 $('#isRes').addEventListener('click', e => {

@@ -430,7 +430,7 @@ const CONFIG = {
   INSP: {
     ID: '1ebVK2IwTrukOQi-eEwUuR5dcU63d-xLnJO-ObCp3_Do',
     GIDS: ['877923199', '389491743'],
-    COLS: { req:'B', name:'F', proj:'G', pn:'I', done:'O', res:'P' },   // 수입검사 요청일 · 품명 · 프로젝트명 · 품번 · 검수완료일 · 검수결과
+    COLS: { req:'B', proj:'G', pn:'I', name:'J', done:'O', res:'P' },   // 수입검사 요청일 · 프로젝트명 · 품번 · 품명 · 검수완료일 · 검수결과
     QUICK: ['BUFFER', 'ROBOT LIQUID TRAY'],   // 빠른 검색 (고른 프로젝트 안에서 품명으로 찾음)
   },
   SERVER_URL: 'https://script.google.com/macros/s/AKfycbwEUJgtuePCy6R-n8w5Dr9UHD606NkefAEr64lDdC6A4yOx5ZPDUNjpU0rPQUcMhWXI/exec',
@@ -2111,7 +2111,7 @@ $('#stRes').addEventListener('click', e => {
 
 /* ================== 수입검사 탭 (구글시트 2장: CONFIG.INSP) ==================
  * 열은 제목 글자로 찾고(열이 추가돼도 따라감), 못 찾으면 CONFIG.INSP.COLS의 열 위치를 씀
- * 표시: 검수결과(P) · 품명(F) · 품번(I) · 수입검사 요청일(B) · 검수완료일(O, 비었으면 '검수대기') / 프로젝트(G)로 검색 */
+ * 표시: 검수결과(P) · 품명(J) · 품번(I) · 수입검사 요청일(B) · 검수완료일(O, 비었으면 '검수대기') / 프로젝트(G)로 검색 */
 const INSP_HEAD = {
   proj: /프로젝트|PROJECT/i, name: /^품\s*명/, pn: /^(품\s*번|도\s*번|P\/?N)/i,
   req: /요청\s*일|요청\s*일자|요청\s*날짜/, done: /완료\s*일|완료\s*일자|완료\s*날짜/, res: /검수\s*결과|^결과$|판정/,
@@ -2124,8 +2124,10 @@ function inspCols(probe){
   probe.slice(0, 20).forEach((r, i) => { const n = Object.values(INSP_HEAD).filter(re => r.some(x => re.test(clean(x)))).length; if (n > bn) { bn = n; best = i; } });
   const col = {}, hdr = bn >= 3 ? probe[best] : null;
   for (const [f, re] of Object.entries(INSP_HEAD)) {
-    const j = hdr ? hdr.findIndex(x => re.test(clean(x))) : -1;
-    col[f] = j >= 0 ? j : colNo(CONFIG.INSP.COLS[f]);
+    // 제목이 맞는 열 중 지정한 열(COLS)에서 가장 가까운 열 (열이 추가돼 밀려도 따라감, 같은 제목이 여러 개여도 지정한 쪽). 없으면 지정한 열
+    const def = colNo(CONFIG.INSP.COLS[f]);
+    const js = hdr ? hdr.map((x, j) => re.test(clean(x)) ? j : -1).filter(j => j >= 0) : [];
+    col[f] = js.length ? js.reduce((a, j) => Math.abs(j - def) < Math.abs(a - def) ? j : a) : def;
   }
   return { col, start: hdr ? best + 1 : 0 };
 }
@@ -2200,7 +2202,7 @@ $('#isQ').addEventListener('keydown', e => {
   if (e.key === 'Escape') dd.style.display = 'none';
 });
 $('#isQ').addEventListener('blur', () => setTimeout(() => $('#isDD').style.display = 'none', 150));
-// 빠른 검색: 고른 프로젝트 안에서 품명(F열)에 그 글자가 들어간 건 (띄어쓰기·대소문자 무시)
+// 빠른 검색: 고른 프로젝트 안에서 품명(J열)에 그 글자가 들어간 건 (띄어쓰기·대소문자 무시)
 const isHas = (r, q) => key(r.name).includes(key(q));
 function inspQuick(){
   const rows = S.is.proj ? (S.is.rows || []).filter(r => r.k === S.is.k) : null;

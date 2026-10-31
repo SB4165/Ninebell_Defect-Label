@@ -129,6 +129,17 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
 .cands{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .chip{font:inherit;font-size:12px;border:1px solid var(--bd);border-radius:2em;padding:3px 10px;background:var(--bg2);cursor:pointer;color:var(--fg);text-align:left}
 /* 수입검사 탭 */
+.isg{margin:0 0 14px}
+.isgh{width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font:inherit;text-align:left;background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:6px;cursor:pointer;color:var(--fg)}
+.isgh:hover{border-color:var(--acc)}
+.isgh .pd{font-weight:700;font-variant-numeric:tabular-nums}
+.isgh .dd2{font-size:11px;font-weight:700;border-radius:2em;padding:1px 7px;background:#eef1f4;color:var(--mut)}
+.isgh .dd2.d0{background:#ffebe9;color:#cf222e} .isgh .dd2.d3{background:#fff8c5;color:#9a6700}
+.isgh .pn2{font-weight:700;font-size:15px;word-break:break-all} .isgh .pn2 small{display:block;font-weight:400;font-size:11px;color:var(--mut)}
+.isgh .sm2{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+.ib2{font-size:11px;font-weight:700;border-radius:2em;padding:1px 7px;background:#eef1f4;color:var(--mut)}
+.ib2.ok{background:var(--ok-bg);color:var(--ok)} .ib2.ng{background:#ffebe9;color:#cf222e} .ib2.wait{background:#fff8c5;color:#7d4e00}
+
 .isq{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
 .isq .lb{font-size:12px;color:var(--mut);font-weight:600;margin-right:2px}
 .isq .chip{font-size:13px;padding:5px 12px;font-weight:600}
@@ -1898,7 +1909,7 @@ function showTab(t){
   document.querySelectorAll('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   $('#pMain').hidden = t !== 'main'; $('#pReq').hidden = t !== 'req'; $('#pStat').hidden = t !== 'stat'; $('#pInsp').hidden = t !== 'insp';
   if (t === 'stat') stLoad();
-  if (t === 'insp') inspLoad();
+  if (t === 'insp') { inspLoad(); isPackLoad(); }
   clearInterval(reqTimer); reqTimer = null;
   if (t === 'req') { renderReqForm(); loadReq(); reqTimer = setInterval(() => { if (!document.hidden && !document.querySelector('.modal')) loadReq(true); }, 15000); }
   try { sessionStorage.setItem('dl_tab', t); } catch(e) {}
@@ -2208,39 +2219,91 @@ $('#isQ').addEventListener('blur', () => setTimeout(() => $('#isDD').style.displ
 // 빠른 검색: 고른 프로젝트 안에서 품명(J열)에 그 글자가 들어간 건 (띄어쓰기·대소문자 무시)
 const isQuick = label => CONFIG.INSP.QUICK.find(x => x.label === label) || { label };
 const isHas = (r, label) => { const n = key(r.name); return (isQuick(label).any || [label]).some(w => n.includes(key(w))); };
+// 빠른 검색 버튼 글자 옆 숫자: 프로젝트를 골랐으면 그 안의 건수, 안 골랐으면 4주 이내 패킹 프로젝트 수
 function inspQuick(){
   const rows = S.is.proj ? (S.is.rows || []).filter(r => r.k === S.is.k) : null;
   $('#isQuick').innerHTML = '<span class="lb">빠른 검색</span>' + CONFIG.INSP.QUICK.map(x => { const q = x.label;
-    const n = rows ? rows.filter(r => isHas(r, q)).length : null;
-    return `<button type="button" class="chip${S.is.q === q ? ' on' : ''}" data-isq="${esc(q)}">${esc(q)}${n != null ? `<small>${n}건</small>` : ''}</button>`; }).join('');
+    let n = '';
+    if (rows) n = `${rows.filter(r => isHas(r, q)).length}건`;
+    else { const g = isGroups(q); if (g) n = `${g.list.length}개 프로젝트`; }
+    return `<button type="button" class="chip${S.is.q === q ? ' on' : ''}" data-isq="${esc(q)}">${esc(q)}${n ? `<small>${n}</small>` : ''}</button>`; }).join('');
+}
+/* 프로젝트를 안 고르고 빠른 검색: 4주 이내 패킹 프로젝트(처리현황과 같은 품질팀 서버의 BACKLOG 패킹일) 중
+ * 수입검사 대장에 그 품명 건이 있는 프로젝트만, 패킹일 빠른 순.
+ * 프로젝트명 연결: 같거나, 짧은 쪽(5글자 이상)이 긴 쪽의 앞부분이면 (띄어쓰기·대소문자 무시). 예: ECP352 ↔ ECP352 EFEM 연결, EFEM ↔ ECP352 EFEM 연결 안 함 */
+const INSP_WEEKS = 4;
+S.is.pk = { busy:false, err:'' };
+async function isPackLoad(){
+  if (S.st.snap || S.is.pk.busy) return;
+  S.is.pk.busy = true; S.is.pk.err = '';
+  try { stTake(await stApi('statusGet')); } catch(e) { S.is.pk.err = e.message; }
+  S.is.pk.busy = false; inspQuick(); inspRender();
+}
+const isLink = (a, b) => { if (a === b) return true; const [s, l] = a.length < b.length ? [a, b] : [b, a]; return s.length >= 5 && l.startsWith(s); };
+function isGroups(q){
+  if (!S.st.snap || !S.is.rows) return null;
+  const t0 = new Date(); t0.setHours(0,0,0,0); const t1 = new Date(t0); t1.setDate(t0.getDate() + INSP_WEEKS * 7);
+  const hit = S.is.rows.filter(r => isHas(r, q)), list = [];
+  (S.st.snap.projects || []).forEach(([name, pk]) => {
+    const d = String(pk || '').split(/\s*,\s*/).map(packDate).filter(x => x && x >= t0 && x <= t1).sort((a, b) => a - b)[0];
+    if (!d) return;
+    const k = key(name), rows = hit.filter(r => isLink(r.k, k));
+    const insp = [...new Set(rows.map(r => r.proj))].sort((a, b) => (key(b) === k) - (key(a) === k));   // 이름이 똑같은 대장 프로젝트를 먼저
+    if (rows.length) list.push({ name, d, dd:Math.round((d - t0) / 864e5), rows, insp });
+  });
+  list.sort((a, b) => a.d - b.d || ko(a.name, b.name));
+  return { t0, t1, list };
 }
 $('#isQuick').addEventListener('click', e => {
   const b = e.target.closest('[data-isq]'); if (!b) return;
-  if (!S.is.proj) { toast('프로젝트를 먼저 골라 주세요', 1800); $('#isQ').focus(); return; }
-  S.is.q = S.is.q === b.dataset.isq ? '' : b.dataset.isq; S.is.state = '*'; inspQuick(); inspRender();
+  S.is.q = S.is.q === b.dataset.isq ? '' : b.dataset.isq; S.is.state = '*';
+  if (S.is.q && !S.is.proj) isPackLoad();
+  inspQuick(); inspRender();
 });
-function inspRender(){
-  const box = $('#isRes');
-  if (!S.is.proj || !S.is.rows) { box.hidden = true; return; }
-  box.hidden = false;
-  const all = S.is.rows.filter(r => r.k === S.is.k), base = S.is.q ? all.filter(r => isHas(r, S.is.q)) : all;
-  const cnt = { '*':base.length }; base.forEach(r => cnt[r.kind] = (cnt[r.kind] || 0) + 1);
-  const shown = (S.is.state === '*' ? base : base.filter(r => r.kind === S.is.state))
-    .sort((a, b) => (b.kind === 'wait') - (a.kind === 'wait') || b.req.d - a.req.d || ko(a.name, b.name));
-  const chip = (v, lab) => cnt[v] || v === '*' ? `<button type="button" class="chip${S.is.state === v ? ' on' : ''}" data-iss="${v}">${lab}<b>${cnt[v] || 0}</b></button>` : '';
-  const card = r => `<div class="isc ${r.kind}">
+const isSort = (a, b) => (b.kind === 'wait') - (a.kind === 'wait') || b.req.d - a.req.d || ko(a.name, b.name);
+const isCard = r => `<div class="isc ${r.kind}">
       <span class="ib ${r.kind}">${esc(r.kind === 'wait' ? '검수대기' : r.res || INSP_KIND[r.kind])}</span>${r.kind === 'wait' && r.res ? `<span class="rn">검수결과 칸: ${esc(r.res)}</span>` : ''}
       <div class="nm">${esc(r.name || '(품명 없음)')}</div>
       <div class="pn"><span>품번</span>${esc(r.pn || '-')}</div>
       <dl class="dt"><dt>수입검사 요청일</dt><dd>${esc(r.req.t || '-')}</dd><dt>검수완료일</dt><dd class="${r.done.t ? '' : 'wait'}">${esc(r.done.t || '검수대기')}</dd></dl>
     </div>`;
+const isCnt = rows => { const c = { '*':rows.length }; rows.forEach(r => c[r.kind] = (c[r.kind] || 0) + 1); return c; };
+const isChips = cnt => { const chip = (v, lab) => cnt[v] || v === '*' ? `<button type="button" class="chip${S.is.state === v ? ' on' : ''}" data-iss="${v}">${lab}<b>${cnt[v] || 0}</b></button>` : '';
+  return `<div class="ism">${chip('*', '전체')}${chip('wait', '검수대기')}${chip('ok', '합격')}${chip('ng', '불합격')}${chip('etc', '기타')}</div>`; };
+const isWords = q => (isQuick(q).any || [q]).map(w => `'${esc(w)}'`).join(' 또는 ');
+function inspRender(){
+  const box = $('#isRes');
+  if (!S.is.rows || (!S.is.proj && !S.is.q)) { box.hidden = true; return; }
+  box.hidden = false;
+  if (!S.is.proj) return isRenderMulti(box);
+  const all = S.is.rows.filter(r => r.k === S.is.k), base = S.is.q ? all.filter(r => isHas(r, S.is.q)) : all;
+  const shown = (S.is.state === '*' ? base : base.filter(r => r.kind === S.is.state)).sort(isSort);
   box.innerHTML = `<div class="rh"><h3>${esc(S.is.proj)}</h3><span class="mut">수입검사 ${all.length}건</span><button type="button" class="btn sm x" data-isx title="닫기">✕ 닫기</button></div>
-    <div class="ism">${chip('*', '전체')}${chip('wait', '검수대기')}${chip('ok', '합격')}${chip('ng', '불합격')}${chip('etc', '기타')}</div>
-    ${S.is.q ? `<div class="isf">품명에 ${(isQuick(S.is.q).any || [S.is.q]).map(w => `'${esc(w)}'`).join(' 또는 ')} 들어간 건만 보는 중<button type="button" class="btn sm" data-isqx>전체 보기</button></div>` : ''}
-    ${shown.length ? `<div class="stlist">${shown.map(card).join('')}</div>` : `<p class="mut">${S.is.q ? `이 프로젝트에 품명이 '${esc(S.is.q)}'인 수입검사 건이 없어요.` : '해당하는 건이 없어요.'}</p>`}`;
+    ${isChips(isCnt(base))}
+    ${S.is.q ? `<div class="isf">품명에 ${isWords(S.is.q)} 들어간 건만 보는 중<button type="button" class="btn sm" data-isqx>전체 보기</button></div>` : ''}
+    ${shown.length ? `<div class="stlist">${shown.map(isCard).join('')}</div>` : `<p class="mut">${S.is.q ? `이 프로젝트에 품명이 '${esc(S.is.q)}'인 수입검사 건이 없어요.` : '해당하는 건이 없어요.'}</p>`}`;
+}
+// 4주 이내 패킹 프로젝트별 묶음
+function isRenderMulti(box){
+  const q = S.is.q, g = isGroups(q);
+  const head = `<div class="rh"><h3>${esc(q)}</h3><span class="mut">${INSP_WEEKS}주 이내 패킹 프로젝트</span><button type="button" class="btn sm x" data-isqx title="닫기">✕ 닫기</button></div>`;
+  if (!g) { box.innerHTML = head + `<p class="mut">${S.is.pk.err ? `<span style="color:#cf222e">패킹일을 불러오지 못했어요: ${esc(S.is.pk.err)}</span>` : '패킹일 불러오는 중…'}</p>`; return; }
+  const all = [...new Set(g.list.flatMap(x => x.rows))], cnt = isCnt(all);   // 두 프로젝트에 같이 걸린 건은 한 번만 셈
+  const groups = g.list.map(x => ({ ...x, show:(S.is.state === '*' ? x.rows : x.rows.filter(r => r.kind === S.is.state)).sort(isSort) })).filter(x => x.show.length);
+  const sum = rows => { const c = isCnt(rows); return [['wait','검수대기'],['ok','합격'],['ng','불합격'],['etc','기타']].filter(([k]) => c[k]).map(([k, l]) => `<span class="ib2 ${k}">${l} ${c[k]}</span>`).join(''); };
+  box.innerHTML = head + `<p class="mut" style="margin:-4px 0 8px;font-size:12px">${fmtDay(g.t0)} ~ ${fmtDay(g.t1)} · 품명에 ${isWords(q)} 들어간 건 · ${g.list.length}개 프로젝트</p>
+    ${g.list.length ? isChips(cnt) : ''}
+    ${groups.length ? groups.map(x => `<div class="isg">
+        <button type="button" class="isgh" data-isp="${esc(x.insp[0])}" title="이 프로젝트만 보기">
+          <span class="pd">${fmtDay(x.d)}</span><span class="dd2 ${x.dd === 0 ? 'd0' : x.dd <= 7 ? 'd3' : ''}">${x.dd === 0 ? '오늘' : 'D-' + x.dd}</span>
+          <span class="pn2">${esc(x.name)}${x.insp.some(n => key(n) !== key(x.name)) ? `<small>대장: ${x.insp.map(esc).join(', ')}</small>` : ''}</span>
+          <span class="sm2">${sum(x.rows)}</span></button>
+        <div class="stlist">${x.show.map(isCard).join('')}</div></div>`).join('')
+      : `<p class="mut">${g.list.length ? '해당하는 건이 없어요.' : `${INSP_WEEKS}주 안에 패킹하는 프로젝트 중 품명이 '${esc(q)}'인 수입검사 건이 있는 프로젝트가 없어요.`}</p>`}`;
 }
 $('#isRes').addEventListener('click', e => {
   const s = e.target.closest('[data-iss]'); if (s) { S.is.state = s.dataset.iss; return inspRender(); }
+  const p = e.target.closest('[data-isp]'); if (p) { const q = S.is.q; isPick(p.dataset.isp); S.is.q = q; inspQuick(); inspRender(); return $('#isQ').scrollIntoView({ behavior:'smooth', block:'start' }); }
   if (e.target.closest('[data-isqx]')) { S.is.q = ''; S.is.state = '*'; inspQuick(); return inspRender(); }
   if (e.target.closest('[data-isx]')) { S.is.proj = ''; S.is.k = ''; S.is.q = ''; $('#isQ').value = ''; inspQuick(); return inspRender(); }
 });

@@ -1947,7 +1947,7 @@ function modal({ title, body = '', fields = [], buttons = [{ label:'확인', val
 S.st = { snap:null, marks:{}, proj:'', mode:'vendor', grp:'', busy:false, rows:null, cache:{}, showDone:false, by:'' };
 const two = n => String(n).padStart(2, '0');
 const fmtAt = t => { if (!t) return '-'; const d = new Date(t); return isNaN(d) ? '-' : `${two(d.getMonth()+1)}/${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`; };
-const TEAM = { mfg:'제조팀', qc:'품질팀', quality:'품질팀' };
+const TEAM = { mfg:'제조팀', qc:'품질팀', quality:'품질팀', pur:'구매팀' };
 const markOf = no => { const m = S.st.marks[no]; return m == null ? null : typeof m === 'object' ? m : { t:+m || 0 }; };
 const stDone = r => r.done || !!markOf(r.no);
 /* 재납일/조치일(처리현황 시트 E열 = 서버 date2, 시트에 보이는 글자 그대로) → 2026.10.31

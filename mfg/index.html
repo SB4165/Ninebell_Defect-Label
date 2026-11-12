@@ -341,7 +341,7 @@ input.need::placeholder,textarea.need::placeholder{color:#8a4a40}
       <div class="f">
         <label for="iPs"><span class="no">8</span>비고</label>
         <input id="iPs" autocomplete="off" placeholder="필요할 때만 입력">
-        <div class="ask"><button class="btn sm selfb" id="bSelf" type="button">자체처리</button><span class="mut">자체처리 예정 또는 완료한 경우에만 클릭해주세요</span></div>
+        <div class="ask"><button class="btn sm selfb" id="bSelf" type="button">자체처리</button><button class="btn sm selfb" id="bStar" type="button">스타타워</button><span class="mut">자체처리: 예정·완료한 경우 클릭<br>스타타워: 재납 필요한 경우 클릭</span></div>
       </div>
     </div>
   </section>
@@ -1326,6 +1326,9 @@ let venErr = '';   // 막은 이름 (안내용)   // 비고는 비어 있어도 
 // 자체처리: 버튼을 켜면 비고에 '자체처리'를 넣고, 끄면 뺌. 비고에 직접 적어도 버튼이 켜짐 ('자체처리 완료'·'예정'도 인정)
 const SELF_DONE = '자체처리', SELF_RE = /\s*자체\s*처리(?:\s*(?:완료|예정))?\s*[,/]?\s*/;
 const hasSelf = v => SELF_RE.test(v || '');
+// 스타타워: 버튼을 켜면 비고에 '스타타워 재납 필요'를 넣고(자체처리 뒤), 끄면 뺌. 직접 적어도 켜짐 (띄어쓰기 무관)
+const STAR_TXT = '스타타워 재납 필요', STAR_RE = /\s*[,/]?\s*스\s*타\s*타\s*워\s*재\s*납\s*필\s*요\s*[,/]?\s*/;
+const hasStar = v => STAR_RE.test(v || '');
 const auto = { proj:'', pn:'', qty:'', ven:'' };   // 자동으로 채운 값(사용자가 고치면 표시 사라짐)
 const ctx = { pur:'', a:{}, sent:'' };              // 이번 사진: 발주번호, 사진에서 읽은 값(학습 기록용), 마지막으로 보낸 기록
 function step(t, pct){ $('#pT').textContent = t; if (pct != null) $('#pB').style.width = pct + '%'; }
@@ -1350,6 +1353,7 @@ $('#qPn').addEventListener('click', e => {
 function refresh(){
   for (const [k, el] of Object.entries(F)) el.classList.toggle('need', !OPTIONAL.has(k) && !clean(el.value));
   $('#bSelf').classList.toggle('on', hasSelf(F.ps.value));
+  $('#bStar').classList.toggle('on', hasStar(F.ps.value));
   F.qty.value = F.qty.value.replace(/\D/g,'');
   for (const k of ['proj','pn','qty','ven']) if (auto[k] && clean(F[k].value) !== auto[k]) { auto[k] = ''; tag('#t'+k[0].toUpperCase()+k.slice(1), '', ''); }
   const pi = clean(F.pn.value) ? partInfo(F.pn.value) : null;
@@ -1890,6 +1894,14 @@ $('#bSelf').addEventListener('click', () => {
   const v = clean(F.ps.value);
   F.ps.value = hasSelf(v) ? clean(v.replace(SELF_RE, ' ')) : (v ? SELF_DONE + ', ' + v : SELF_DONE);
   refresh(); toast(hasSelf(F.ps.value) ? '비고에 자체처리를 넣었어요' : '자체처리를 뺐어요');
+});
+$('#bStar').addEventListener('click', () => {
+  const v = clean(F.ps.value);
+  if (hasStar(v)) F.ps.value = clean(v.replace(STAR_RE, ', ')).replace(/^[,\s]+|[,\s]+$/g, '');
+  else { const m = v.match(SELF_RE), self = m && m.index === 0 ? clean(m[0]).replace(/[,/]$/, '').trim() : '';
+    const rest = self ? clean(v.slice(m[0].length)) : v;
+    F.ps.value = [self, STAR_TXT, rest].filter(Boolean).join(', '); }
+  refresh(); toast(hasStar(F.ps.value) ? '비고에 스타타워 재납 필요를 넣었어요' : '스타타워 재납 필요를 뺐어요');
 });
 
 /* 복사 */
